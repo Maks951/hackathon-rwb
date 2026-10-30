@@ -69,3 +69,4 @@ class Run(Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    package_path: Mapped[str | None] = mapped_column(Text)

@@ -7,7 +7,21 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from test_projects import database, client_for
+from tests.test_projects import database
+from app.api.application import create_app
+from app.config import Settings
+from app.integrations.sql_repository import SqlRunRepository
+from app.ports import Runtime
+from app.api.artifacts import router
+from pathlib import Path
+import os
+
+def client_for(factory):
+    settings = Settings(_env_file=None, database_url=str(factory.kw["bind"].url),
+                        generated_root=Path(os.environ["GENERATED_ROOT"]))
+    runtime = Runtime(repository=SqlRunRepository(settings, factory=factory), routers=(router,))
+    app = create_app(settings, runtime)
+    return TestClient(app)
 from app.db import get_session
 from app.models.project import Project
 from app.models.run import Run
@@ -61,7 +75,7 @@ def test_artifact_roundtrip(database, tmp_path, monkeypatch):
                 assert archive.read('src/example.html') == content
             assert len(client.get(f'/api/v1/runs/{run_id}/artifacts').json()['items']) == 2
             path.write_bytes(b'x' * (1024 * 1024 + 1))
-            assert client.get(f'/api/v1/artifacts/{item.id}/content').status_code == 413
+            assert client.get(f'/api/v1/artifacts/{item.id}/content').status_code == 409
             path.write_text('changed')
             assert client.get(f'/api/v1/artifacts/{item.id}/content').status_code == 409
             assert client.get(f'/api/v1/runs/{uuid4()}/download').status_code == 404

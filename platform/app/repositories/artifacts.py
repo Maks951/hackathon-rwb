@@ -19,7 +19,7 @@ class UnsafeArtifactPath(ValueError):
 
 
 def artifact_path(run_id: UUID, relative: str) -> Path:
-    root = Path(os.environ.get("GENERATED_ROOT", "generated")).absolute()
+    root = Path(os.environ.get("RWB_GENERATED_ROOT", os.environ.get("GENERATED_ROOT", "generated"))).absolute()
     parts = PurePosixPath(relative).parts
     if (not relative or "\\" in relative or ":" in relative
             or relative.startswith("/") or ".." in parts

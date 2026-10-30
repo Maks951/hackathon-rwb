@@ -3,6 +3,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     CheckConstraint,
+    JSON,
     DateTime,
     ForeignKey,
     Integer,
@@ -55,3 +56,4 @@ class Step(Base):
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")

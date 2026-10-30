@@ -1,84 +1,93 @@
-# Первый этап Романа: projects
+# Python runs API и worker — участок Ярослава
 
-Python 3.12, sync SQLAlchemy 2 + psycopg 3, Alembic. Существующие папки команды сохранены; `platform/` следует общему контракту. `app/main.py` принадлежит Ярославу, здесь его нет. `project_demo.py` — только проверка router до интеграции.
+Реализованы API запусков, orchestration, хранение файлов попыток, repair (до двух
+циклов), проверка manifest и воспроизводимый ZIP. Контракт HTTP соответствует
+`RunDto`/`RunDetailsDto` из командного задания. Исходники frontend не изменялись.
 
-## Запуск на Windows (PowerShell)
+В этой интеграционной версии подключены SQL-модели Романа и async-адаптер
+SqlRunRepository к существующему worker Ярослава. Фабрика:
+`app.integrations.database_runtime:create_runtime`. Qwen-адаптер включается только
+при заполненных QWEN_BASE_URL/QWEN_MODEL/QWEN_API_KEY. Runner и отсутствующие
+шаблоны подключаются отдельно; их успешная работа не заявляется.
 
-Из корня репозитория:
+Быстрый запуск Windows и ограничения: [WORKER_INTEGRATION.md](WORKER_INTEGRATION.md).
+Основной воспроизводимый pip-набор этой версии: requirements-integration.lock.txt.
 
-```powershell
-cd platform
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.lock.txt
+## Локальный запуск
+
+Рабочий каталог для всех Python-команд — `platform/`. Python 3.12; зависимости
+и зависимости этой версии закреплены в `requirements-integration.lock.txt`.
+
+```bash
+python -m pip install -r requirements-integration.lock.txt
+cp .env.example .env
+# Сначала настроить существующий PostgreSQL в DATABASE_URL.
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-В pgAdmin подключись к своему PostgreSQL, открой Query Tool базы `postgres` и выполни отдельно (однократно):
+После подключения модулей команды укажи в `.env`
+`RWB_RUNTIME_FACTORY=имя_модуля:имя_фабрики`. Фабрика возвращает `app.ports.Runtime`;
+пример и правила транзакций — в `../docs/integration.md`. Затем в отдельном
+терминале из того же каталога и с тем же `.env`:
 
-```sql
-CREATE ROLE platform LOGIN PASSWORD 'platform_local';
+```bash
+python -m app.worker
 ```
 
-```sql
-CREATE DATABASE platform OWNER platform;
+Swagger: `http://127.0.0.1:8000/docs`. `GET /health` проверяет доступность
+repository либо таблицы projects до интеграции runs. Работа worker/runner проверяется прогоном,
+а не одним health-запросом. Demo предполагает закрытый командный доступ.
+
+В текущем окружении уже создан интерпретатор `platform/.venv/bin/python`.
+Его можно выбрать в настройках Python interpreter в IDE. Команды без uv:
+
+```bash
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+.venv/bin/python -m app.worker
 ```
 
-Пароль выше только для локальной разработки. Для общей VM используй отдельный пароль. БД генерируемого продукта создаётся отдельно; её роль не получает доступ к этой БД.
+## API и передача тимлиду
 
-В том же PowerShell:
+- `POST /api/v1/projects` → `201 ProjectRead`, `{name,requirements}`.
+- `GET /api/v1/projects` → `{items: ProjectRead[]}`.
+- `GET /api/v1/projects/{id}` → ProjectRead или `404 not_found`.
+- `POST /api/v1/projects/{id}/runs`, JSON `{}`, header `Idempotency-Key: UUID`
+  → `202 RunDto`, header `Location` указывает на статус.
+- `GET /api/v1/runs/{id}` → `RunDetailsDto`.
+- `GET /api/v1/runs/{id}/events?afterSequence=0` → `items`, `nextSequence`.
+- `GET /api/v1/runs/{id}/download` → ZIP или `409 package_not_ready`.
+- `GET /health` → `200` или `503`.
 
-```powershell
-$env:DATABASE_URL = "postgresql+psycopg://platform:platform_local@localhost:5432/platform"
-.\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe -m uvicorn app.project_demo:app --reload
+Projects router Романа подключён и использует отдельную Session на запрос.
+Artifacts/auth можно подключить через `Runtime.routers`. Второго варианта
+projects repository или migrations здесь нет.
+Polling UI — каждые 2 секунды, остановить на `succeeded`/`failed`.
+
+Готовые файлы контракта: `../contracts/runs.ts`, `../contracts/platform-openapi.json`.
+Они описывают runs и подключённые projects routes. Переэкспорт:
+
+```bash
+python -m app.export_contracts
 ```
 
-`.env.example` — образец, приложение не загружает `.env` автоматически. Ожидается таблица `projects` и Swagger по http://127.0.0.1:8000/docs. UUID создаёт Python; PostgreSQL задаёт время, API возвращает UTC `createdAt`.
+## Проверки
 
-В Swagger вызови `POST /api/v1/projects`:
-
-```json
-{"name":"Каталог","requirements":"Нужен каталог товаров с названием, ценой и остатком"}
+```bash
+uv run --frozen ruff check app tests
+uv run --frozen ruff format --check app tests
+uv run --frozen pytest -q
 ```
 
-Ожидается 201, затем `GET /api/v1/projects` возвращает `{ "items": [...] }`. Перезапусти сервер — проект должен остаться. `GET /api/v1/projects/{id}` возвращает проект или 404. Невалидный UUID/длина поля — 400 в demo-приложении. name: 1–120, requirements: 20–50000; эти ограничения есть и в PostgreSQL.
+Тесты проверяют наш HTTP-контракт и оркестрацию с изолированными test doubles.
+Они не доказывают работоспособность PostgreSQL-очереди, реального Qwen, сборку
+сгенерированного моделью продукта или deployment. Статус проверок и зависимостей
+зафиксирован в `../docs/yaroslav-handoff.md`.
 
-## Передача Ярославу
+Контейнерный запуск: [docker-integration.md](../docs/docker-integration.md).
+Документация сервиса/API: [platform-service.md](../docs/platform-service.md),
+[platform-api.md](../docs/platform-api.md).
+Новые правила генерации: [documentation-policy.md](../docs/documentation-policy.md).
 
-В существующем composition root подключить:
-
-```python
-from app.api.projects import router as projects_router
-app.include_router(projects_router)
-```
-
-`get_session()` даёт новую Session на запрос и закрывает её. Обработчики sync (`def`). В фоновых потоках создавать свои Sessions через `get_session_factory()()`; не передавать Session из HTTP-запроса. `create_project(session, *, name, requirements)` владеет транзакцией и commit/rollback; передавать свежую Session без уже начатой транзакции. `get_project(session, project_id)` и `list_projects(session)` читают данные. DTO — `app/schemas/projects.py`. Общие обработчики ошибок `RequestValidationError → 400` и `HTTPException → {code,message}` показаны в `project_demo.py`; их надо перенести/согласовать с центральными обработчиками Ярослава. Без них FastAPI по умолчанию возвращает 422 и обёртку detail.
-
-## Проверка для Романа и Дмитрия
-
-Из `platform/`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Без TEST_DATABASE_URL тесты используют временную SQLite: API, сохранение между Sessions, ограничения, rollback всей транзакции, повтор upgrade и downgrade. Это не проверка реального PostgreSQL.
-
-Для проверки PostgreSQL сначала создай **отдельную пустую тестовую БД** `platform_test`, владельцем назначь роль `platform`, затем:
-
-```powershell
-$env:TEST_DATABASE_URL = "postgresql+psycopg://platform:platform_local@localhost:5432/platform_test"
-.\.venv\Scripts\python.exe -m pytest -q
-Remove-Item Env:TEST_DATABASE_URL
-```
-
-Тесты удаляют таблицу projects через downgrade: никогда не указывай рабочую БД в TEST_DATABASE_URL.
-
-SQL миграции без подключения:
-
-```powershell
-.\.venv\Scripts\python.exe -m alembic upgrade head --sql
-```
-
-`alembic downgrade base` удаляет projects с данными; для обычного запуска нужен только `upgrade head`. Не используется `Base.metadata.create_all()` при старте сервера. `requirements-dev.lock.txt` фиксирует зависимости проверенного Linux/Python 3.12 окружения; установку на Windows ещё нужно подтвердить.
-
-Следующий этап — runs и единый контракт очереди с Ярославом; в этом изменении runs/worker/artifacts ещё не реализованы.
+Технические решения сверены с [документацией FastAPI](https://fastapi.tiangolo.com/advanced/testing-events/)
+и [Pydantic aliases](https://docs.pydantic.dev/latest/concepts/alias/).
