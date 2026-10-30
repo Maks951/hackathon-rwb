@@ -1,9 +1,12 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { apiErrorMessage } from '../../core/api-error';
+import { Component, inject, signal, OnInit, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { trimmedMinLength } from '../../core/trimmed-length.validator';
 import { ApiService } from '../../core/api.service';
-import { ApiError, ProjectDto } from '../../core/api.dto';
+import { ProjectDto } from '../../core/api.dto';
 
 @Component({
   selector: 'app-home',
@@ -70,13 +73,14 @@ import { ApiError, ProjectDto } from '../../core/api.dto';
   `,
 })
 export class HomeComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   private api = inject(ApiService);
   private router = inject(Router);
   private fb = inject(FormBuilder);
 
   form = this.fb.nonNullable.group({
-    name: ['', [Validators.required, Validators.minLength(2)]],
-    requirements: ['', [Validators.required, Validators.minLength(10)]],
+    name: ['', [trimmedMinLength(2)]],
+    requirements: ['', [trimmedMinLength(10)]],
   });
 
   projects = signal<ProjectDto[]>([]);
@@ -93,7 +97,7 @@ export class HomeComponent implements OnInit {
   loadProjects(): void {
     this.loading.set(true);
     this.listError.set(null);
-    this.api.listProjects().subscribe({
+    this.api.listProjects().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.projects.set(res.items);
         this.loading.set(false);
@@ -110,7 +114,7 @@ export class HomeComponent implements OnInit {
     this.creating.set(true);
     this.createError.set(null);
     const { name, requirements } = this.form.getRawValue();
-    this.api.createProject({ name: name.trim(), requirements: requirements.trim() }).subscribe({
+    this.api.createProject({ name: name.trim(), requirements: requirements.trim() }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: project => {
         this.creating.set(false);
         this.form.reset({ name: '', requirements: '' });
@@ -123,10 +127,5 @@ export class HomeComponent implements OnInit {
     });
   }
 
-  private errMsg(err: unknown): string {
-    const e = err as { error?: ApiError; message?: string; status?: number };
-    if (e?.error?.message) return `${e.error.message} (${e.error.code})`;
-    if (e?.status) return `HTTP ${e.status}: ${e.message ?? 'request failed'}`;
-    return 'Network error. Is the API running?';
-  }
+  private errMsg = apiErrorMessage;
 }

@@ -1,11 +1,12 @@
-import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { apiErrorMessage } from '../../core/api-error';
+import { Component, inject, signal, computed, OnInit, OnDestroy, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Subscription, forkJoin, of, timer } from 'rxjs';
-import { catchError, switchMap } from 'rxjs/operators';
+import { catchError, exhaustMap, timeout } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ApiService } from '../../core/api.service';
 import {
-  ApiError,
   ArtifactDto,
   EventDto,
   RunDetailsDto,
@@ -35,6 +36,11 @@ import {
         </div>
       }
 
+      @if (eventsError()) {
+        <div class="alert alert-warning">{{ eventsError() }}
+          <button class="btn btn-sm btn-outline-secondary" (click)="restart()">Retry events</button>
+        </div>
+      }
       @if (run(); as r) {
         <div class="card card-body mb-3">
           <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -124,7 +130,9 @@ import {
           @if (artifactsLoading()) {
             <div class="text-muted">Loading artifacts...</div>
           } @else if (artifactsError()) {
-            <div class="alert alert-danger mb-0">{{ artifactsError() }}</div>
+            <div class="alert alert-danger mb-0">{{ artifactsError() }}
+              <button class="btn btn-sm btn-outline-secondary" (click)="retryArtifacts()">Retry artifacts</button>
+            </div>
           } @else if (artifacts().length === 0) {
             <div class="text-muted">No artifacts yet.</div>
           } @else {
@@ -223,12 +231,14 @@ import {
   `,
 })
 export class RunComponent implements OnInit, OnDestroy {
+  private destroyRef = inject(DestroyRef);
+  private viewSub?: Subscription;
+  private artifactSub = new Subscription();
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
 
   private runId: string | null = null;
   private pollSub: Subscription | null = null;
-  private timer: ReturnType<typeof setInterval> | null = null;
   private lastSequence = 0;
   private artifactsLoaded = false;
 
@@ -237,6 +247,7 @@ export class RunComponent implements OnInit, OnDestroy {
   readonly initialError = signal<string | null>(null);
   readonly pollError = signal<string | null>(null);
 
+  readonly eventsError = signal<string | null>(null);
   readonly events = signal<EventDto[]>([]);
   readonly artifacts = signal<ArtifactDto[]>([]);
   readonly artifactsLoading = signal(false);
@@ -266,7 +277,36 @@ export class RunComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
-    this.runId = this.route.snapshot.paramMap.get('id');
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
+      this.runId = params.get('id');
+      this.run.set(null);
+      this.restart();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.stopPolling();
+    this.closeArtifact();
+    this.artifactSub.unsubscribe();
+  }
+
+  restart(): void {
+    this.stopPolling();
+    this.closeArtifact();
+    this.artifactSub.unsubscribe();
+    this.artifactSub = new Subscription();
+    this.lastSequence = 0;
+    this.artifactsLoaded = false;
+    this.artifacts.set([]);
+    this.artifactsLoading.set(false);
+    this.artifactsError.set(null);
+    this.events.set([]);
+    this.eventsError.set(null);
+    this.analysisText.set(null);
+    this.designText.set(null);
+    this.pollError.set(null);
+    this.initialError.set(null);
+    this.loading.set(true);
     if (!this.runId) {
       this.loading.set(false);
       this.initialError.set('Missing run id in URL.');
@@ -275,97 +315,60 @@ export class RunComponent implements OnInit, OnDestroy {
     this.startPolling();
   }
 
-  ngOnDestroy(): void {
-    this.stopPolling();
-  }
-
-  restart(): void {
-    this.stopPolling();
-    this.lastSequence = 0;
-    this.artifactsLoaded = false;
-    this.artifacts.set([]);
-    this.events.set([]);
-    this.analysisText.set(null);
-    this.designText.set(null);
-    this.pollError.set(null);
-    this.initialError.set(null);
-    this.loading.set(true);
-    this.startPolling();
-  }
-
-  private startPolling(): void {
-    this.tick();
-    this.timer = setInterval(() => this.tick(), 2000);
-  }
-
   private stopPolling(): void {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
-    }
     this.pollSub?.unsubscribe();
     this.pollSub = null;
   }
 
-  private tick(): void {
-    if (!this.runId) return;
-    if (this.pollSub) return; // предыдущий запрос ещё не завершился
-
-    const runId = this.runId;
-
-    const run$ = this.api.getRun(runId).pipe(
-      // 10s таймаут: зависший запрос не блокирует polling навсегда
-      switchMap(res => timer(0).pipe(() => of(res))),
-      catchError(err => {
-        // пробрасываем наверх, обработаем в subscribe
-        throw err;
-      })
-    );
-
-    const events$ = this.api
-      .getEvents(runId, this.lastSequence)
-      .pipe(catchError(() => of({ items: [] as EventDto[], nextSequence: this.lastSequence })));
-
-    this.pollSub = forkJoin({ run: run$, events: events$ }).subscribe({
-      next: ({ run, events }) => {
-        this.pollSub = null;
+  private startPolling(): void {
+    const runId = this.runId!;
+    this.pollSub = timer(0, 2000).pipe(
+      // Skip ticks while a request is active; a hung request times out.
+      exhaustMap(() => forkJoin({
+        run: this.api.getRun(runId).pipe(timeout(10000)),
+        events: this.api.getEvents(runId, this.lastSequence).pipe(
+          timeout(10000),
+          catchError(error => {
+            this.eventsError.set(this.errMsg(error));
+            return of(null);
+          }),
+        ),
+      }).pipe(catchError(error => {
         this.loading.set(false);
-        this.initialError.set(null);
-        this.pollError.set(null);
-
-        this.run.set(run);
-
-        if (events.items.length > 0) {
-          this.events.update(prev => [...prev, ...events.items]);
-          this.lastSequence = events.nextSequence;
-        }
-
-        if (run.status === 'succeeded' || run.status === 'failed') {
-          this.stopPolling();
-          if (run.status === 'succeeded' && !this.artifactsLoaded) {
-            this.loadArtifacts(run.id);
-          }
-        }
-      },
-      error: (err: unknown) => {
-        this.pollSub = null;
-        this.loading.set(false);
-        const msg = this.errMsg(err);
-        if (!this.run()) {
-          this.initialError.set(msg);
-          this.stopPolling();
-        } else {
-          this.pollError.set(msg);
-          // таймер продолжает тикать — восстановится при следующем успехе
-        }
-      },
+        if (this.run()) this.pollError.set(this.errMsg(error));
+        else this.initialError.set(this.errMsg(error));
+        return of(null);
+      }))),
+      takeUntilDestroyed(this.destroyRef),
+    ).subscribe(result => {
+      if (!result) return;
+      const { run, events } = result;
+      this.loading.set(false);
+      this.initialError.set(null);
+      this.pollError.set(null);
+      this.run.set(run);
+      if (events) {
+        this.eventsError.set(null);
+        const seen = new Set(this.events().map(event => event.id));
+        this.events.update(previous => [...previous, ...events.items.filter(event => !seen.has(event.id))]
+          .sort((a, b) => a.sequence - b.sequence));
+        this.lastSequence = Math.max(this.lastSequence, events.nextSequence);
+      }
+      if (run.status === 'succeeded' || run.status === 'failed') {
+        this.stopPolling();
+        if (!this.artifactsLoaded) this.loadArtifacts(runId);
+      }
     });
+  }
+
+  retryArtifacts(): void {
+    if (this.runId) this.loadArtifacts(this.runId);
   }
 
   private loadArtifacts(runId: string): void {
     this.artifactsLoading.set(true);
     this.artifactsError.set(null);
-    this.api.getArtifacts(runId).subscribe({
+    this.artifactSub.add(this.api.getArtifacts(runId).pipe(timeout(10000), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.artifacts.set(res.items);
         this.artifactsLoading.set(false);
@@ -376,29 +379,28 @@ export class RunComponent implements OnInit, OnDestroy {
         this.artifactsError.set(this.errMsg(err));
         this.artifactsLoading.set(false);
       },
-    });
+    }));
   }
 
   /**
    * analyze/design показываем как текст.
-   * Ищем по path (устойчиво к mimeType), fallback — по mimeType.
-   * Подгони пути под фактический output Ярослава, если имена другие.
+   * Ищем известные имена файлов по path, независимо от MIME-типа.
    */
   private loadStageTexts(items: ArtifactDto[]): void {
     const analysis = this.findArtifact(items, ['analysis.md', 'requirements.md', 'requirements.json']);
     const design = this.findArtifact(items, ['design.md', 'system.md', 'system.json']);
 
     if (analysis) {
-      this.api.getArtifactContent(analysis.id).subscribe({
+      this.artifactSub.add(this.api.getArtifactContent(analysis.id).pipe(timeout(10000), takeUntilDestroyed(this.destroyRef)).subscribe({
         next: t => this.analysisText.set(t),
         error: () => { /* не критично для demo */ },
-      });
+      }));
     }
     if (design) {
-      this.api.getArtifactContent(design.id).subscribe({
+      this.artifactSub.add(this.api.getArtifactContent(design.id).pipe(timeout(10000), takeUntilDestroyed(this.destroyRef)).subscribe({
         next: t => this.designText.set(t),
         error: () => { /* не критично */ },
-      });
+      }));
     }
   }
 
@@ -425,8 +427,9 @@ export class RunComponent implements OnInit, OnDestroy {
   }
 
   openArtifact(a: ArtifactDto): void {
+    this.viewSub?.unsubscribe();
     this.openedArtifact.set({ artifact: a, loading: true, error: null, content: null });
-    this.api.getArtifactContent(a.id).subscribe({
+    this.viewSub = this.api.getArtifactContent(a.id).pipe(timeout(10000), takeUntilDestroyed(this.destroyRef)).subscribe({
       next: content => {
         const cur = this.openedArtifact();
         if (cur && cur.artifact.id === a.id) {
@@ -443,6 +446,7 @@ export class RunComponent implements OnInit, OnDestroy {
   }
 
   closeArtifact(): void {
+    this.viewSub?.unsubscribe();
     this.openedArtifact.set(null);
   }
 
@@ -470,10 +474,5 @@ export class RunComponent implements OnInit, OnDestroy {
     }
   }
 
-  private errMsg(err: unknown): string {
-    const e = err as { error?: ApiError; message?: string; status?: number };
-    if (e?.error?.message) return `${e.error.message} (${e.error.code})`;
-    if (e?.status) return `HTTP ${e.status}: ${e.message ?? 'request failed'}`;
-    return 'Network error. Is the API running?';
-  }
+  private errMsg = apiErrorMessage;
 }

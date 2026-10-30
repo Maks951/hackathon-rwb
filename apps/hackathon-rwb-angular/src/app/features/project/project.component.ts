@@ -1,8 +1,11 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
+import { apiErrorMessage } from '../../core/api-error';
+import { Component, inject, signal, OnInit, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { ApiService } from '../../core/api.service';
-import { ApiError, ProjectDto } from '../../core/api.dto';
+import { ProjectDto } from '../../core/api.dto';
 
 @Component({
   selector: 'app-project',
@@ -40,6 +43,9 @@ import { ApiError, ProjectDto } from '../../core/api.dto';
   `,
 })
 export class ProjectComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
+  private loadSub?: Subscription;
+  private startSub?: Subscription;
   private api = inject(ApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
@@ -56,7 +62,7 @@ export class ProjectComponent implements OnInit {
   private idempotencyProjectId: string | null = null;
 
   ngOnInit(): void {
-    this.load();
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.load());
   }
 
   load(): void {
@@ -65,9 +71,14 @@ export class ProjectComponent implements OnInit {
       this.loadError.set('Missing project id in URL.');
       return;
     }
+    this.startSub?.unsubscribe();
+    this.starting.set(false);
+    this.startError.set(null);
+    this.loadSub?.unsubscribe();
+    this.project.set(null);
     this.loading.set(true);
     this.loadError.set(null);
-    this.api.getProject(id).subscribe({
+    this.loadSub = this.api.getProject(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: p => {
         this.project.set(p);
         this.loading.set(false);
@@ -92,7 +103,7 @@ export class ProjectComponent implements OnInit {
     this.starting.set(true);
     this.startError.set(null);
 
-    this.api.startRun(p.id, this.idempotencyKey).subscribe({
+    this.startSub = this.api.startRun(p.id, this.idempotencyKey).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: run => {
         // Успех: сбрасываем ключ, идём на страницу run
         this.idempotencyKey = null;
@@ -108,15 +119,5 @@ export class ProjectComponent implements OnInit {
     });
   }
 
-  private errMsg(err: unknown): string {
-    const e = err as { error?: ApiError; message?: string; status?: number };
-    if (e?.status === 409) {
-      return e?.error?.message
-        ? `Conflict: ${e.error.message}`
-        : 'Conflict: a run for this project is already active.';
-    }
-    if (e?.error?.message) return `${e.error.message} (${e.error.code})`;
-    if (e?.status) return `HTTP ${e.status}: ${e.message ?? 'request failed'}`;
-    return 'Network error. Is the API running?';
-  }
+  private errMsg = apiErrorMessage;
 }
