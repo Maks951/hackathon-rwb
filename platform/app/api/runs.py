@@ -14,7 +14,9 @@ from app.repositories.runs import (
     RunConflict,
     create_run_with_snapshot,
 )
-from app.schemas.runs import RunRead
+from app.schemas.runs import RunRead, RunDetails
+from app.models.step import Step
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/v1", tags=["runs"])
 
@@ -53,7 +55,7 @@ def create_run(
                 "message": str(exc),
             },
         )
-@router.get("/runs/{run_id}", response_model=RunRead)
+@router.get("/runs/{run_id}", response_model=RunDetails)
 def get_run(
     run_id: UUID,
     session: Session = Depends(get_session),
@@ -69,7 +71,13 @@ def get_run(
             },
         )
 
-    return run
+    payload = RunRead.model_validate(run).model_dump()
+    payload["steps"] = list(session.scalars(
+        select(Step).where(Step.run_id == run_id).order_by(Step.key, Step.attempt)
+    ))
+    payload["validation_status"] = run.validation_status
+    payload["deployment_status"] = run.deployment_status
+    return payload
 @router.get(
     "/runs/{run_id}/events",
     response_model=EventList,

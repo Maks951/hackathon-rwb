@@ -21,3 +21,17 @@ class RunRead(BaseModel):
     preview_url: str | None
     created_at: datetime
     finished_at: datetime | None
+
+class StepRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    key: str
+    attempt: int
+    status: str
+    error: str | None
+
+
+class RunDetails(RunRead):
+    steps: list[StepRead]
+    validation_status: str
+    deployment_status: str

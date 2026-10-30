@@ -10,6 +10,9 @@ app = FastAPI(title="Projects integration check")
 app.include_router(router)
 app.include_router(runs_router)
 
+from app.api.artifacts import router as artifacts_router
+app.include_router(artifacts_router)
+
 @app.exception_handler(RequestValidationError)
 def invalid_input(request: Request, exc: RequestValidationError):
     return JSONResponse(status_code=400, content={"code": "invalid_input", "message": "Invalid project input"})
