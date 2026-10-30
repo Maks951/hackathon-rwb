@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,23 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
     run_timeout_seconds: float = Field(default=900, gt=0)
     llm_timeout_seconds: float = Field(default=120, gt=0)
+    qwen_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("QWEN_BASE_URL", "RWB_QWEN_BASE_URL"),
+    )
+    qwen_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("QWEN_MODEL", "RWB_QWEN_MODEL"),
+    )
+    qwen_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("QWEN_API_KEY", "RWB_QWEN_API_KEY"),
+        repr=False,
+    )
+    qwen_api_path: str = Field(
+        default="/chat/completions",
+        validation_alias=AliasChoices("QWEN_API_PATH", "RWB_QWEN_API_PATH"),
+    )
     heartbeat_seconds: float = Field(default=10, gt=0)
     stale_seconds: float = Field(default=60, gt=0)
     poll_seconds: float = Field(default=2, gt=0)

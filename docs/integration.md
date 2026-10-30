@@ -169,3 +169,14 @@ query-токенов и fragment. None adapter означает отсутств
 deployment. При ошибке deploy: failed step и deploymentStatus=failed, previewUrl=null.
 Проверенный/package-ready run может быть succeeded независимо от deploymentStatus.
 Токен GitLab остаётся у publisher, не в архиве или UI.
+
+## Владимир: Qwen adapter (реализация в `platform/app/llm/`)
+
+- `QwenGenerationAdapter` реализует существующий `GenerationAdapter` без изменения порта.
+- Настройки: `QWEN_BASE_URL`, `QWEN_MODEL`, `QWEN_API_KEY`; опционально `QWEN_API_PATH` (default `/chat/completions`). Использовать только точные значения endpoint/model/key от организаторов. HTTP разрешён только для localhost; внешний endpoint должен быть HTTPS.
+- Ярослав подключает его в своей runtime factory: `generation=create_qwen_adapter(settings)`. Repository/worker composition остаются у Ярослава/Романа.
+- Схемы: `RequirementsSpec` для `analyze`, `SystemSpec` для `design`, общий `StageFiles` для всех code/repair stages. Проверяются типы, уникальность id в коллекциях и ссылки.
+- `httpx` transport не делает скрытых retry. 429/5xx и transport errors помечаются transient; auth/прочие 4xx — non-transient. Retry/backoff и JSON correction остаются у `StepExecutor`.
+- Usage берётся только из provider response; если поля отсутствуют, сохраняется `null`. `finish_reason=length` передаётся наверх как truncation.
+- Реальный smoke test после заполнения ENV: `cd platform && PYTHONPATH=. python scripts/qwen_smoke.py`. Он печатает только безопасные метаданные, не API key и не полный ответ.
+- Endpoint compatibility, latency и реальную доступность нельзя считать проверенными до smoke test с credentials организаторов.
