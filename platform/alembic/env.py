@@ -2,6 +2,9 @@ import os
 from alembic import context
 from sqlalchemy import create_engine, pool
 from app.models.project import Base
+from app.models.step import Step
+from app.models.run import Run
+from app.models.run_event import RunEvent
 
 target_metadata = Base.metadata
 url = os.environ["DATABASE_URL"]

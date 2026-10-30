@@ -3,12 +3,12 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
-
+from app.api.runs import router as runs_router
 from app.api.projects import router
 
 app = FastAPI(title="Projects integration check")
 app.include_router(router)
-
+app.include_router(runs_router)
 
 @app.exception_handler(RequestValidationError)
 def invalid_input(request: Request, exc: RequestValidationError):
