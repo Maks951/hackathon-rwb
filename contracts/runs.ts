@@ -52,3 +52,19 @@ export interface EventsDto {
   items: EventDto[];
   nextSequence: number;
 }
+
+export interface ProjectCreate {
+  name: string;
+  requirements: string;
+}
+
+export interface ProjectRead {
+  id: string;
+  name: string;
+  requirements: string;
+  createdAt: string;
+}
+
+export interface ProjectList {
+  items: ProjectRead[];
+}

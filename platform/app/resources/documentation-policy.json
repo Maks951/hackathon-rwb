@@ -1,0 +1,127 @@
+{
+  "policyVersion": "russtech-sa-2026-10-30",
+  "sources": [
+    {
+      "name": "Правила_ведения_документации_СА_обезл.pdf",
+      "sha256": "5e45dfaff36636aa2629a8f74a903df01f918e5db00d8bbf76ec4ee3ac14140d"
+    },
+    {
+      "name": "Шаблон ADR_обезл.pdf",
+      "sha256": "07d91b6b8c38961cc2b9fcf40fbefecc232ab6e9c47c9936e6a40ee4c6056ae5"
+    },
+    {
+      "name": "Шаблон API_обезл.pdf",
+      "sha256": "7a2d0a95a1b4c7d0606240476cfc6e56a8bb3532ab19224fb37dc38cc78c6846"
+    },
+    {
+      "name": "Шаблон ТЗ_обезл.pdf",
+      "sha256": "35cdeaf41f59c499c2d32269334e6fda1e0eef28b957304c245a0e61b8f655e4"
+    },
+    {
+      "name": "Шаблон описания сервисов_обезл.pdf",
+      "sha256": "79f640ebc5c530891ddd6dcc5e88d65894975087c25d04520cf72bc5feb59ab7"
+    }
+  ],
+  "documents": [
+    {
+      "path": "docs/system-analysis.md",
+      "sections": [
+        "Оглавление",
+        "История изменений",
+        "Ответственные лица",
+        "Лист согласования",
+        "Термины и определения",
+        "Используемые документы",
+        "Назначение и границы системы",
+        "Цель",
+        "Условия и ограничения",
+        "Критерии приемки",
+        "Сценарии использования",
+        "Диаграммы",
+        "Функциональные требования",
+        "Трассировка требований",
+        "Frontend",
+        "Backend",
+        "Модель данных",
+        "Интеграции",
+        "Метрики",
+        "Нефункциональные требования",
+        "Допущения и открытые вопросы"
+      ]
+    },
+    {
+      "path": "docs/api.md",
+      "sections": [
+        "Основная информация",
+        "История изменений",
+        "Входящие параметры",
+        "Исходящие параметры",
+        "Взаимодействие с таблицами",
+        "Описание алгоритма работы метода",
+        "Взаимодействие с внешними компонентами"
+      ]
+    },
+    {
+      "path": "docs/services.md",
+      "sections": [
+        "Описание",
+        "Ссылки",
+        "Требования к ресурсам",
+        "Отказоустойчивость",
+        "Предельные ограничения работы сервиса",
+        "Работа сервиса",
+        "Авторизация",
+        "Описание окружений",
+        "Сборка",
+        "Деплой",
+        "Конфигурация",
+        "Переменные окружения для CI/CD",
+        "Мониторинг",
+        "Логирование",
+        "Сетевая связность",
+        "Доступы к сервису"
+      ]
+    },
+    {
+      "path": "docs/adr.md",
+      "sections": [
+        "Контекст и постановка проблемы",
+        "Статус",
+        "Альтернативы",
+        "Принятое решение",
+        "Последствия принятого решения",
+        "Ответственные"
+      ]
+    },
+    {
+      "path": "docs/user-guide.md",
+      "sections": [
+        "Назначение",
+        "Пользовательские сценарии",
+        "Ошибки и ограничения"
+      ]
+    },
+    {
+      "path": "docs/runbook.md",
+      "sections": [
+        "Требования к окружению",
+        "Конфигурация",
+        "Сборка и запуск",
+        "Проверка работоспособности",
+        "Известные ограничения"
+      ]
+    }
+  ],
+  "instructions": [
+    "Markdown adaptation of the organizer-provided templates. No Confluence/Jira access or approval is implied.",
+    "Keep business requirements separate from assumptions. Number functional requirements FR-1, FR-2 and trace business requirements to FR, endpoints and acceptance tests.",
+    "Use supplied headings with nonempty content. A non-applicable section must state why. Unknown owners, approval, URLs, measured load/RTO and credentials remain explicitly unknown; never invent them.",
+    "For every endpoint in generatedApi, use a level-2 heading METHOD /path in docs/api.md and the required API sections at level 3 inside that endpoint block.",
+    "API sections cover authorization/access, headers/path/query/body, required/nullable fields/types/limits, request/response examples, successful/error HTTP codes, tables, main/exception flows and external sources.",
+    "Describe frontend-to-backend field mappings, data types/PK/FK, events/messages, validation, security, caching and non-functional limits where applicable. Preserve editable PlantUML/Mermaid sources for diagrams.",
+    "Service docs distinguish actual prod/stage/test availability, declared resource limits from measured throughput, build/deploy/env/logging/monitoring/network access. No borrowed sample infrastructure, versions or metrics.",
+    "ADR compares alternatives, pros/cons, the chosen decision and consequences; status must reflect reality. Do not invent stakeholder approval.",
+    "User guide/runbook describe the generated product, not the Python platform. The product backend is C#/.NET 10 and has its own database.",
+    "Do not generate a successful test/security report. The pipeline packages its actual validation report separately as reports/validation.json."
+  ]
+}

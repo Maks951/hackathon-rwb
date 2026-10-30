@@ -7,6 +7,7 @@ from pathlib import Path
 from app.api.application import create_app
 from app.config import Settings
 from app.ports import Runtime
+from app.schemas.projects import ProjectCreate, ProjectList, ProjectRead
 from app.schemas.runs import (
     DeploymentStatus,
     ErrorDto,
@@ -51,8 +52,18 @@ def typescript() -> str:
     for enum in (RunStatus, StepStatus, ValidationStatus, DeploymentStatus):
         values = " | ".join(json.dumps(item.value) for item in enum)
         lines.extend([f"export type {enum.__name__} = {values};", ""])
-    for model in (ErrorDto, RunDto, StepDto, RunDetailsDto, EventDto, EventsDto):
-        schema = model.model_json_schema(by_alias=True)
+    for model in (
+        ErrorDto,
+        RunDto,
+        StepDto,
+        RunDetailsDto,
+        EventDto,
+        EventsDto,
+        ProjectCreate,
+        ProjectRead,
+        ProjectList,
+    ):
+        schema = model.model_json_schema(by_alias=True, mode="serialization")
         inherited = (
             RunDto.model_json_schema(by_alias=True)["properties"] if model is RunDetailsDto else {}
         )

@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 
 from app.errors import AppError, ProviderError
-from app.ports import GenerationResponse, ValidationReport
+from app.ports import CheckResult, GenerationResponse, ValidationReport
 from app.schemas.runs import DeploymentStatus, RunStatus, StepStatus, ValidationStatus
 from app.services.storage import Storage
 from app.worker import Worker
@@ -84,6 +84,22 @@ async def test_empty_report_cannot_pass_validation(settings, runtime):
     await Worker(runtime, settings).run_once()
     assert (await runtime.repository.get_run(queued.id)).status == RunStatus.FAILED
     assert not runtime.repository.packages
+
+
+def test_runner_status_is_a_boolean_not_a_truthy_string():
+    names = (
+        "backend_build",
+        "backend_tests",
+        "admin_build",
+        "pwa_build",
+        "api_contract",
+        "security",
+        "documentation",
+    )
+    checks = tuple(CheckResult(name, True, "completed") for name in names)
+    assert ValidationReport(checks).passed
+    invalid = (CheckResult("backend_build", "false", "invalid adapter payload"), *checks[1:])
+    assert not ValidationReport(invalid).passed
 
 
 async def test_bad_json_has_one_correction_and_preserves_metadata(settings, runtime):

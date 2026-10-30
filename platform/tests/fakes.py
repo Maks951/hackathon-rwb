@@ -176,6 +176,27 @@ class ScriptedGeneration:
                 ],
             }
         else:
+            if request.stage == "generate_tests_docs":
+                documents = []
+                policy = request.inputs["documentationPolicy"]
+                for document in policy["documents"]:
+                    if document["path"] == "docs/api.md":
+                        text = f"# API\n\n## GET /api/v1/{self.domain}\n\n"
+                        text += "\n\n".join(
+                            f"### {section}\nTest fixture documentation content."
+                            for section in document["sections"]
+                        )
+                    else:
+                        text = "\n\n".join(
+                            f"## {section}\nTest fixture documentation content; FR-1."
+                            for section in document["sections"]
+                        )
+                    documents.append({"path": document["path"], "content": text})
+                return GenerationResponse(
+                    json.dumps({"schemaVersion": 1, "files": documents, "notes": []}),
+                    "test-only-model",
+                    "fixture-v1",
+                )
             name = {
                 "generate_db": "database/generated/schema.sql",
                 "generate_backend": BACKEND_FILE,

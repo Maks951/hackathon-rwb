@@ -7,10 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
+from app.api.projects import router as projects_router
 from app.api.runs import router
 from app.composition import load_runtime
 from app.config import Settings
 from app.errors import AppError, safe_error
+from app.integrations.projects import install_projects
 from app.ports import Runtime
 from app.schemas.runs import ErrorDto, HealthDto
 from app.services.storage import Storage
@@ -25,7 +27,10 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # Queue work runs in `python -m app.worker`, never an API background task.
-        yield
+        try:
+            yield
+        finally:
+            close_database()
 
     errors = {code: {"model": ErrorDto} for code in (400, 404, 409, 413, 500, 502, 503)}
     app = FastAPI(
@@ -34,6 +39,7 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     app.state.settings = settings
     app.state.runtime = runtime
     app.state.storage = Storage(settings)
+    project_readiness, close_database = install_projects(app, settings)
     if settings.cors_origins:
         app.add_middleware(
             CORSMiddleware,
@@ -59,10 +65,15 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
+        if isinstance(exc.detail, dict) and set(exc.detail) <= {"code", "message", "details"}:
+            try:
+                error = ErrorDto.model_validate(exc.detail)
+            except ValueError:
+                error = ErrorDto(code="http_error", message="Запрос не может быть выполнен.")
+        else:
+            error = ErrorDto(code="http_error", message="Запрос не может быть выполнен.")
         return JSONResponse(
-            ErrorDto(code="http_error", message="Запрос не может быть выполнен.").model_dump(
-                mode="json"
-            ),
+            error.model_dump(mode="json"),
             status_code=exc.status_code,
         )
 
@@ -74,7 +85,11 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
     @app.get("/health", response_model=HealthDto, responses={503: {"model": HealthDto}})
     async def health() -> JSONResponse:
         try:
-            ready = runtime.repository is not None and await runtime.repository.ping()
+            ready = (
+                await runtime.repository.ping()
+                if runtime.repository is not None
+                else await project_readiness()
+            )
         except Exception:
             ready = False
         return JSONResponse(
@@ -83,7 +98,8 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
 
     app.include_router(router)
     for extra_router in runtime.routers:
-        app.include_router(extra_router)  # Roman's project/artifact API, existing auth, etc.
+        if extra_router is not projects_router:
+            app.include_router(extra_router)  # Additional artifact/auth APIs.
 
     original_openapi = app.openapi
 

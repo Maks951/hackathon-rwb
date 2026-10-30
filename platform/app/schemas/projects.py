@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
@@ -19,8 +19,8 @@ class ProjectRead(BaseModel):
     @field_serializer("created_at")
     def serialize_created_at(self, value: datetime) -> str:
         if value.tzinfo is None:  # SQLite test adapter; PostgreSQL returns aware timestamps.
-            value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 class ProjectList(BaseModel):

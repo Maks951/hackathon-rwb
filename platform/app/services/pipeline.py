@@ -14,6 +14,7 @@ from app.ports import (
     Workspace,
 )
 from app.schemas.runs import DeploymentStatus
+from app.services.documentation import DocumentationPolicy, check_documentation, load_policy
 from app.services.steps import StepExecutor, StepResult
 from app.services.storage import StageFiles, Storage
 
@@ -72,6 +73,12 @@ class Pipeline:
         self.steps = StepExecutor(runtime.repository, runtime.generation, self.storage, settings)
 
     async def run(self, run: RunRecord) -> None:
+        policy = load_policy().model_dump(mode="json")
+        saved_policy = self.storage.write_json(f"{run.id}/documentation-policy.json", policy)
+        documentation = {
+            "documentationPolicy": policy,
+            "documentationPolicySha256": saved_policy.sha256,
+        }
         # Analyze/design can be used independently before colleagues' templates are available.
         snapshot = self.storage.write_json(
             f"{run.id}/requirements.json",
@@ -83,13 +90,13 @@ class Pipeline:
             run.id,
             "analyze",
             1,
-            self.storage.read_json(snapshot.path),
+            {**self.storage.read_json(snapshot.path), **documentation},
         )
         spec_path = await self.steps.generate(
             run.id,
             "design",
             1,
-            {"requirementsSpec": self.storage.read_json(analyzed_path)},
+            {"requirementsSpec": self.storage.read_json(analyzed_path), **documentation},
         )
         spec = self.storage.read_json(spec_path)
         contract = api_contract(spec)
@@ -102,6 +109,7 @@ class Pipeline:
             self.storage.read_json(analyzed_path)
         )
         files["system-spec.json"] = self.storage.json_bytes(spec)
+        files["documentation-policy.json"] = self.storage.json_bytes(policy)
         for stage in CODE_STAGES:
             template_root = {
                 "generate_db": "database/",
@@ -119,6 +127,7 @@ class Pipeline:
                     "generatedApi": self.storage.read_json(contract_artifact.path),
                     "generatedApiSha256": contract_artifact.sha256,
                     "ownedPaths": self.owned_paths(stage),
+                    **documentation,
                     "templateContext": [
                         {"path": name, "content": content.decode("utf-8")}
                         for name, content in files.items()
@@ -175,6 +184,7 @@ class Pipeline:
                     "workspaceId": workspace.id,
                     "files": self.repair_inputs(workspace),
                     "validation": errors,
+                    **documentation,
                     "constraint": (
                         "Only replace generated files. SystemSpec and dependencies are immutable."
                     ),
@@ -190,7 +200,17 @@ class Pipeline:
             workspace = self.storage.materialize(run.id, repair_cycle + 1, files)
 
         async def package_operation() -> StepResult:
-            artifact = self.storage.package(run.id, workspace)
+            artifact = self.storage.package(
+                run.id,
+                workspace,
+                validation={
+                    "passed": report.passed,
+                    "checks": [asdict(c) for c in report.checks],
+                    "workspaceId": workspace.id,
+                    "sourceManifest": [asdict(a) for a in workspace.files],
+                    "documentationPolicySha256": saved_policy.sha256,
+                },
+            )
             return StepResult(asdict(artifact), [artifact])
 
         package_path = await self.steps.execute(
@@ -259,8 +279,16 @@ class Pipeline:
             if self.runtime.validator is None:
                 raise IntegrationUnavailable("validation runner")
             # Read before and after the runner: neither runner nor repair may mutate old attempts.
-            self.storage.workspace_files(workspace)
-            report = await self.runtime.validator.validate(workspace)
+            files = self.storage.workspace_files(workspace)
+            policy = DocumentationPolicy.model_validate(
+                self.storage.read_json(f"{run.id}/documentation-policy.json")
+            )
+            doc_check = check_documentation(
+                files, self.storage.read_json(f"{run.id}/steps/design/001/output.json"), policy
+            )
+            runner_report = await self.runtime.validator.validate(workspace)
+            # This check is ours; a runner-provided same-name check cannot override it.
+            report = ValidationReport((*runner_report.checks, doc_check))
             self.storage.workspace_files(workspace)
             if len(report.checks) > 100 or any(len(c.message) > 8192 for c in report.checks):
                 raise AppError("invalid_validation_report", "Отчёт runner превышает лимит.")

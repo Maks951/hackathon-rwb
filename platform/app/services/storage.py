@@ -232,8 +232,15 @@ class Storage:
         self.check_tree(files)
         return files
 
-    def package(self, run_id: UUID, workspace: Workspace) -> ArtifactRecord:
+    def package(
+        self, run_id: UUID, workspace: Workspace, validation: dict | None = None
+    ) -> ArtifactRecord:
         files = self.workspace_files(workspace)
+        if validation is not None:
+            if "reports/validation.json" in files:
+                raise AppError("file_collision", "Отчёт проверок должен формировать pipeline.")
+            files["reports/validation.json"] = self.json_bytes(validation)
+        self.check_tree(files)
         stream = io.BytesIO()
         # Fixed timestamps, permissions, order and compression make the ZIP reproducible.
         with zipfile.ZipFile(

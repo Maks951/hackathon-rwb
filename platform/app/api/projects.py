@@ -26,5 +26,7 @@ def list_projects(session: DbSession):
 def get_project(project_id: UUID, session: DbSession):
     project = projects.get_project(session, project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail={"code": "not_found", "message": "Project not found"})
+        raise HTTPException(
+            status_code=404, detail={"code": "not_found", "message": "Project not found"}
+        )
     return project

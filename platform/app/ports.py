@@ -150,12 +150,13 @@ class ValidationReport:
             "pwa_build",
             "api_contract",
             "security",
+            "documentation",
         }
         names = [c.name for c in self.checks]
         return (
             required.issubset(names)
             and len(names) == len(set(names))
-            and all(c.passed for c in self.checks)
+            and all(c.passed is True for c in self.checks)
         )
 
 

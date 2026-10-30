@@ -1,13 +1,23 @@
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="RWB_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_prefix="RWB_",
+        env_file=".env",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     runtime_factory: str | None = None
+    database_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_URL", "RWB_DATABASE_URL"),
+        repr=False,
+    )
     generated_root: Path = Path("../generated")
     templates_root: Path = Path("../templates")
     cors_origins: list[str] = Field(default_factory=list)
@@ -21,6 +31,7 @@ class Settings(BaseSettings):
     max_tree_bytes: int = Field(default=25_165_824, gt=0)
     max_response_bytes: int = Field(default=8_388_608, gt=0)
     max_events: int = Field(default=200, ge=1, le=1000)
+    database_connect_timeout_seconds: int = Field(default=3, ge=1, le=30)
 
     @model_validator(mode="after")
     def check_heartbeat(self) -> "Settings":

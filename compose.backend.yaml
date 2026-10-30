@@ -1,0 +1,66 @@
+# Integrated from Docker b8ca420; platform infrastructure only, not a generated-code runner.
+x-platform: &platform
+  image: localhost/rwb-platform:dev
+  build:
+    context: .
+    dockerfile: platform/Dockerfile
+  init: true
+  env_file:
+    - ./platform/.env
+  environment:
+    DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in platform/.env}@database:5432/platform
+    RWB_GENERATED_ROOT: /app/generated
+    RWB_TEMPLATES_ROOT: /app/templates
+  volumes:
+    - generated:/app/generated
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+services:
+  database:
+    image: docker.io/library/postgres:17.9
+    environment:
+      POSTGRES_DB: platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in platform/.env}
+    volumes:
+      - platform-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U platform -d platform"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *platform
+    command: [python, -m, alembic, upgrade, head]
+    depends_on:
+      database:
+        condition: service_healthy
+
+  api:
+    <<: *platform
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  worker:
+    <<: *platform
+    command: [python, -m, app.worker]
+    profiles: [pipeline]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  platform-db:
+  generated:

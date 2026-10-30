@@ -20,14 +20,19 @@ def create_runtime(settings) -> Runtime:
         validator=validation_runner,   # Дмитрий
         publisher=publisher_or_none,   # Дмитрий, optional
         deployer=deployer_or_none,     # Дмитрий, optional
-        routers=(projects_router, artifacts_router),  # Роман, existing prefixes
+        routers=(artifacts_router,),  # Роман, existing prefix; projects already integrated
     )
 ```
 
-Пример намеренно не выдаёт несуществующие импорты коллег за рабочие. API и worker —
+Projects router/repository/migration Романа уже влиты из `18100ec` и подключены
+через `app.integrations.projects`. Его sync Sessions выполняются FastAPI в threadpool.
+Основной app берёт DATABASE_URL из ENV/.env; engine закрывается при shutdown.
+Остальные переменные примера — точки для отсутствующих модулей, не рабочие импорты.
+API и worker —
 разные процессы; factory не должна запускать фоновые worker-задачи или сохранять
-очередь в памяти. Для реальных модулей PostgreSQL/Qwen их владельцы добавляют
-SQLAlchemy 2, psycopg 3, Alembic, httpx в общий `platform/pyproject.toml` и обновляют lock.
+очередь в памяти. SQLAlchemy 2, psycopg 3, Alembic уже включены в
+`platform/pyproject.toml`; будущий HTTP adapter добавляет свои runtime зависимости
+туда и обновляет uv.lock.
 API не получает Qwen/GitLab секреты в ответах; factory берёт секреты из ENV.
 
 ## Repository — Роман
@@ -84,6 +89,9 @@ RequirementsSpec для design; сохранённый SystemSpec, единый 
 hash и контекст соответствующего шаблона для генерации файлов. Большой репозиторий
 целиком модели не передаётся. Для repair: сохранённый spec/contract, текущие
 генерируемые файлы, diagnostics и workspaceId.
+Все stages также получают `documentationPolicy` и SHA256: новые PDF организаторов
+нормализованы в `app/resources/documentation-policy.json`.
+Правила и имена Markdown-файлов: [documentation-policy.md](documentation-policy.md).
 
 `GenerationResponse`: content — JSON-текст, model_id, prompt_version, finish_reason
 (успешное завершение нормализовать в `stop`), nullable input/output_tokens.
@@ -148,7 +156,9 @@ Runner не получает shell-команд от модели, Qwen/GitLab �
 `ValidationReport.checks` должен содержать уникальные checks с bool passed и
 безопасным ограниченным message. Пустой/частичный отчёт не может быть passed.
 Обязательные имена: `backend_build`, `backend_tests`, `admin_build`, `pwa_build`,
-`api_contract`, `security`. Можно добавить acceptance/integration/PWA checks;
+`api_contract`, `security`. Check `documentation` добавляется pipeline по новым
+правилам; это зарезервированное имя, runner его не подменяет.
+Можно добавить acceptance/integration/PWA checks;
 любая failed check блокирует package. `security` — реальный запуск согласованных
 проверок, а не факт наличия сканера. Диагностика не содержит секретов.
 Все обязательные checks повторяются после каждого repair (максимум 2).

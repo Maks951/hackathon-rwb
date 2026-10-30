@@ -6,6 +6,67 @@
 30.10 16:17: Qwen API доступен из VM, HTTP `/chat/completions`; GitLab обещан позже.
 Ссылка/ключ/фактический modelId в конфигурацию не выдумывались.
 
+## Обновление: Docker, projects и новые регламенты
+
+Влиты ветки `Docker` (`b8ca420`) и `database_backend` (`18100ec`), их история
+сохранена. Код проектов Романа подключён в production composition root через
+`app.integrations.projects`: repository/model/migration переиспользованы, новых
+таблиц/миграций в этом участке не создавалось. Небольшие изменения в исходниках
+Романа — только общее форматирование/UTC alias, бизнес-логика сохранена.
+
+Добавлены platform/Dockerfile, .dockerignore и compose.backend.yaml: PostgreSQL
+17.9 → миграция → API, worker отдельно в профиле pipeline; shared generated volume,
+пользователь 10001, без Docker socket. Python base закреплён проверенным digest,
+requirements для pip экспортированы с hashes из единого uv.lock.
+
+Новые пять PDF организаторов нормализованы в immutable documentation-policy.json
+(имена/хеши источников сохранены). Policy передаётся на всех stages; структурная
+check documentation проверяет 6 документов, непустые разделы, FR-ID и каждый
+API endpoint. Ошибки участвуют в repair. ZIP включает реальный validation report
+с source manifest и policy hash. Смысловую правильность документа check не доказывает.
+
+Актуальная инструкция: [Docker](docker-integration.md), [сервис](platform-service.md),
+[API](platform-api.md), [политика документации](documentation-policy.md),
+[ADR](adr-platform-runtime.md). OpenAPI/TypeScript обновлены для projects; RunDto
+и RunDetailsDto сохранены.
+
+Проверки обновления:
+
+```bash
+# Из platform; переменная TEST_DATABASE_URL удалена для изоляции SQLite fixtures.
+env -u TEST_DATABASE_URL .venv/bin/pytest -q
+.venv/bin/ruff check app tests scripts
+.venv/bin/ruff format --check app tests scripts
+.venv/bin/python -m compileall -q app scripts
+.venv/bin/python -m app.export_contracts
+
+# Из корня; в проверенном окружении имеется rootless Podman.
+podman build -f platform/Dockerfile -t localhost/rwb-platform:dev .
+platform/.venv/bin/python platform/scripts/check_container_stack.py \
+  --compose /tmp/rwb-bootstrap/bin/podman-compose
+```
+
+Python: **68 passed**, Ruff/format/compileall/OpenAPI export успешно. Есть 20
+deprecation warnings из Starlette TestClient и Alembic config, без failures.
+Проверка runner требует именно bool True: строка "false" не засчитывается как passed.
+
+Контейнерная сборка и smoke **passed**: настоящий PostgreSQL 17.9, Alembic,
+POST project 201, сохранение/GET после рестарта API, 400 invalid input, 404 missing,
+UID=10001, writable generated volume, .env/.venv исключены из образа. Проверка
+использовала уникальный временный Compose project и удалила только свои volumes.
+На системе с podman-compose в PATH аргумент --compose не требуется.
+Docker Engine отдельно не проверялся; использован совместимый Podman build/Compose.
+
+### Актуальные блокеры
+
+Работают API проектов и PostgreSQL, но RunRepository (runs/steps/events/artifacts),
+Qwen adapter/specs/prompts, изолированный runner и шаблоны admin/PWA/Postgres
+продукта ещё отсутствуют. Health=200 подтверждает API/БД, не весь pipeline.
+Генерация по настоящему Qwen, PostgreSQL-очередь/конкуренция и deployment продукта
+не проверены и не считаются завершёнными. В production-коде заглушек вместо них нет.
+
+Ниже сохранены результаты первого этапа для контекста; они не заменяют актуальный статус выше.
+
 ## Что реализовано в своём участке
 
 - `platform/app/api/`, `schemas/runs.py`: FastAPI routes создания/просмотра run,
@@ -66,11 +127,11 @@ liveness, безопасный 404 и readiness=503 при отсутствии 
 запускались вне sandbox: внутри запрещены IPC sockets. Это проверка написанного
 вручную технологического шаблона, а не сборки произвольного модельного результата.
 
-## Что нужно получить для настоящего end-to-end
+## Зависимости первого этапа (projects теперь подключены)
 
 1. Роман: PostgreSQL RunRepository с транзакционной идемпотентностью, snapshot,
    SKIP LOCKED queue, событиями/metadata/heartbeat/stale recovery; routers
-   проектов и artifacts, свои модели и Alembic миграции. Их реализация не дублировалась.
+   artifacts и собственные миграции runs. Projects/model/migration уже подключены из 18100ec.
 2. Владимир: реальный Qwen adapter, prompts, полные RequirementsSpec/SystemSpec,
    проверка references, фактические credentials/modelId в ENV на доступной VM.
    Модель и network transport не подменялись заглушкой в production-коде.
@@ -84,8 +145,8 @@ liveness, безопасный 404 и readiness=503 при отсутствии 
    выполнить настоящий Qwen → PostgreSQL → isolated runner → ZIP прогон, затем
    проверить parking acceptance и второй домен с бизнес-экспертами.
 
-Реальные Qwen/DB integration, PostgreSQL concurrency, generated product acceptance,
-publish и deploy **не проверены**: требуемые модули/доступы отсутствовали в ветке.
+Реальные Qwen integration, PostgreSQL queue concurrency, generated product acceptance,
+publish и deploy **не проверены**. PostgreSQL для projects проверен в обновлении выше.
 Запуск всего командного продукта не заявляется готовым.
 Frontend, коллегиальные migrations, Kafka/Compose/CI/модельные prompts не переписывались.
 Рабочая ветка для передачи изменений команде: `backend`.
