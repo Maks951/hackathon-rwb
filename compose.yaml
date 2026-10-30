@@ -1,0 +1,13 @@
+services:
+  frontend:
+    image: node:24-alpine
+    working_dir: /app
+    ports:
+      - "127.0.0.1:4200:4200"
+    volumes:
+      - ./hackathon-rwb-angular:/app
+      - frontend_modules:/app/node_modules
+    command: sh -c "npm ci && npm start -- --host 0.0.0.0 --poll 2000"
+
+volumes:
+  frontend_modules:
