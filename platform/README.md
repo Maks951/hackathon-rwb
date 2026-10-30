@@ -1,29 +1,31 @@
+> Актуальный запуск и ограничения объединённой версии: [../docs/local-stack.md](../docs/local-stack.md).
+
 # Python runs API и worker — участок Ярослава
 
 Реализованы API запусков, orchestration, хранение файлов попыток, repair (до двух
 циклов), проверка manifest и воспроизводимый ZIP. Контракт HTTP соответствует
 `RunDto`/`RunDetailsDto` из командного задания. Исходники frontend не изменялись.
 
-Это компонент платформы, а не полностью интегрированный командный продукт.
-Подключён модуль проектов Романа из `database_backend` (`18100ec`): PostgreSQL,
-Alembic и projects API в основном приложении. Runs repository, Qwen,
-runner и шаблоны admin/PWA/SQL ещё нужно подключить от владельцев.
-Без доступной БД/миграции `/health` отвечает `503`; runs API без RunRepository
-также отвечает `503`. Worker без обязательных
-адаптеров завершается с понятной ошибкой. В продакшен-коде нет очереди в памяти,
-модельных ответов-заглушек и фиктивных результатов проверки.
+В этой интеграционной версии подключены SQL-модели Романа и async-адаптер
+SqlRunRepository к существующему worker Ярослава. Фабрика:
+`app.integrations.database_runtime:create_runtime`. Qwen-адаптер включается только
+при заполненных QWEN_BASE_URL/QWEN_MODEL/QWEN_API_KEY. Runner и отсутствующие
+шаблоны подключаются отдельно; их успешная работа не заявляется.
+
+Быстрый запуск Windows и ограничения: [WORKER_INTEGRATION.md](WORKER_INTEGRATION.md).
+Основной воспроизводимый pip-набор этой версии: requirements-integration.lock.txt.
 
 ## Локальный запуск
 
 Рабочий каталог для всех Python-команд — `platform/`. Python 3.12; зависимости
-и транзитивные версии закреплены в `uv.lock`.
+и зависимости этой версии закреплены в `requirements-integration.lock.txt`.
 
 ```bash
-uv sync --frozen --group dev
+python -m pip install -r requirements-integration.lock.txt
 cp .env.example .env
 # Сначала настроить существующий PostgreSQL в DATABASE_URL.
-uv run --env-file .env --frozen python -m alembic upgrade head
-uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port 8000
+python -m alembic upgrade head
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 После подключения модулей команды укажи в `.env`
@@ -32,7 +34,7 @@ uv run --frozen uvicorn app.main:app --host 127.0.0.1 --port 8000
 терминале из того же каталога и с тем же `.env`:
 
 ```bash
-uv run --frozen python -m app.worker
+python -m app.worker
 ```
 
 Swagger: `http://127.0.0.1:8000/docs`. `GET /health` проверяет доступность
@@ -68,7 +70,7 @@ Polling UI — каждые 2 секунды, остановить на `succeed
 Они описывают runs и подключённые projects routes. Переэкспорт:
 
 ```bash
-uv run --frozen python -m app.export_contracts
+python -m app.export_contracts
 ```
 
 ## Проверки

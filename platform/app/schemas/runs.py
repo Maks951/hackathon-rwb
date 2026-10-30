@@ -95,3 +95,9 @@ class EventsDto(ApiDto):
 
 class HealthDto(ApiDto):
     status: Literal["ok", "not_ready"]
+
+
+# Compatibility names for Roman's local scripts.
+RunRead = RunDto
+RunDetails = RunDetailsDto
+StepRead = StepDto

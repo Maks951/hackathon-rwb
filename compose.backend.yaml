@@ -9,10 +9,13 @@ x-platform: &platform
     - ./platform/.env
   environment:
     DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in platform/.env}@database:5432/platform
+    RWB_RUNTIME_FACTORY: app.integrations.database_runtime:create_runtime
     RWB_GENERATED_ROOT: /app/generated
     RWB_TEMPLATES_ROOT: /app/templates
   volumes:
     - generated:/app/generated
+  extra_hosts:
+    - "host.docker.internal:host-gateway"
   security_opt:
     - no-new-privileges:true
   cap_drop:

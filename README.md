@@ -1,19 +1,21 @@
 # Hackathon RWB
 
-Python API/worker участка Ярослава: [platform/README.md](platform/README.md).
-Исходное распределение ролей — в командном `03_Yaroslav_Python_Pipeline.md`.
+Объединенная версия: [запуск и ограничения](docs/local-stack.md).
+Локальная интеграция frontend, SQL API/worker и Qwen adapter; полный сценарий
+генерации пока не подтвержден. ValidationRunner требует реализации/подключения.
 
-- `platform/` — runs API, worker, orchestration, безопасное дерево файлов и ZIP.
-- `templates/dotnet-api/` — C# 14 / .NET 10 backend skeleton для продукта.
-- `contracts/runs.ts`, `contracts/platform-openapi.json` — выходной API-контракт для UI/тимлида.
-- `docs/integration.md` — точки подключения компонентов коллег.
-- `docs/yaroslav-handoff.md` — сделанное, результаты проверок и оставшиеся зависимости.
-- `compose.backend.yaml`, `platform/Dockerfile` — адаптация Docker-шаблона команды,
-  PostgreSQL платформы и API. Запуск: [docs/docker-integration.md](docs/docker-integration.md).
-- `platform/app/resources/documentation-policy.json` — новые регламенты СА/API/ADR
-  организаторов, передаваемые генератору и проверяемые перед package.
-- `hackathon-rwb-angular/`, `hackthon-rwb-db/` — существующие каталоги команды.
+- `apps/hackathon-rwb-angular/`: интерфейс платформы.
+- `platform/`: API, очередь PostgreSQL, worker, Qwen и storage.
+- `templates/`: .NET backend, Angular admin/PWA, PostgreSQL продукта.
+- `compose.yaml`: общий запуск, `compose.backend.yaml`: backend services.
+- `contracts/`: экспортированный API-контракт.
+- `docs/source-pdfs/`: пять исходных регламентов.
+- `docs/pdf/`: рабочие ТЗ, API, сервисы, ADR и проверка соответствия.
 
-Projects Романа подключены, работают с настоящей БД. Полный pipeline подключается
-через RunRepository/Qwen/runner adapters команды;
-до интеграции внешних модулей нельзя считать весь продукт готовым.
+```bash
+cp platform/.env.example platform/.env
+docker compose --env-file platform/.env up --build -d
+```
+
+Перед worker настроить Qwen. Команды, зависимости и реальные результаты проверок:
+[docs/local-stack.md](docs/local-stack.md), [docs/integration-results.md](docs/integration-results.md).

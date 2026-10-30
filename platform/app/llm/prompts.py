@@ -1,4 +1,5 @@
 """Versioned prompts. Keep the generated product stack explicit and stable."""
+
 from __future__ import annotations
 
 import json
@@ -9,7 +10,8 @@ from app.ports import GenerationRequest
 
 PROMPT_VERSION = "rwb-qwen-v2-schema"
 PRODUCT_STACK = (
-    "Generated product stack is fixed: C# 14 / ASP.NET Core 10, Angular 20.1.6, "
+    "Generated product stack is fixed: C# 14 / ASP.NET Core 10, "
+    "Angular (versions fixed by the supplied package-lock.json), "
     "PostgreSQL 17.9 with PostGIS where geospatial behavior is required. "
     "Never generate FastAPI or Python as the product backend."
 )
@@ -26,30 +28,50 @@ STAGE_INSTRUCTIONS = {
     "analyze": """Analyze the supplied business requirements and return RequirementsSpec:
 {schemaVersion:1,title,actors:[{id,name,description}],entities:[{id,name,description,fields:[{id,name,type,nullable,required,enumValues,reference}]}],rules:[{id,description,entityRefs}],acceptanceCriteria:[{id,description,verifies}],assumptions:[string]}.
 Use only field types string, integer, number, boolean, date, datetime, uuid, enum, json, geojson.
-Every rule entityRefs must reference an entity id. Acceptance verifies may reference entity or rule ids.
+Every rule entityRefs must reference an entity id. Acceptance verifies may reference entity or
+rule ids.
 """,
     "design": """Design a coherent SystemSpec from RequirementsSpec and return:
-{schemaVersion:1,entities:[...same entity shape...],endpoints:[{id,method,path,summary,entityRefs}],pages:[{id,name,description,entityRefs,endpointRefs}],events:[{id,name,description,entityRefs}],acceptanceTests:[{id,description,entityRefs,endpointRefs,pageRefs}]}.
-Every reference must resolve. Every API endpoint needs a stable id, HTTP method and path beginning /api/v1/.
+{schemaVersion:1,entities:[...same entity
+shape...],endpoints:[{id,method,path,summary,entityRefs}],pages:[{id,name,description,entityRefs,endpointRefs}],events:[{id,name,description,entityRefs}],acceptanceTests:[{id,description,entityRefs,endpointRefs,pageRefs}]}.
+Every reference must resolve. Every API endpoint needs a stable id, HTTP method and path
+beginning /api/v1/.
 Use a single consistent API contract for backend, admin, PWA and tests.
 """,
     "generate_db": f"""Generate SQL files only. {PRODUCT_STACK}
-Use PostgreSQL-compatible SQL; use PostGIS only when required by SystemSpec. Keep schema aligned with SystemSpec entities and field types. Do not generate migration history or platform database tables. Return StageFiles with paths under database/generated/ and .sql extensions.
+Use PostgreSQL-compatible SQL; use PostGIS only when required by SystemSpec. Keep schema aligned
+with SystemSpec entities and field types. Do not generate migration history or platform database
+tables. Return StageFiles with paths under database/generated/ and .sql extensions.
 """,
     "generate_backend": f"""Generate domain C# source only. {PRODUCT_STACK}
-Use the supplied backend template and generatedApi contract. Generate domain entities/services/endpoints in the allowed Generated directories. Do not alter project/dependency files, framework versions, authentication secrets, or template files. Return StageFiles with paths under backend/src/Generated.Api/Generated/ or backend/tests/Generated.Api.Tests/Generated/ and .cs extensions.
+Use the supplied backend template and generatedApi contract. Generate domain
+entities/services/endpoints in the allowed Generated directories. Do not alter
+project/dependency files, framework versions, authentication secrets, or template files. Return
+StageFiles with paths under backend/src/Generated.Api/Generated/ or
+backend/tests/Generated.Api.Tests/Generated/ and .cs extensions.
 """,
     "generate_web": f"""Generate Angular admin domain screen/configuration. {PRODUCT_STACK}
-Use the supplied admin template and generatedApi contract exactly. Do not add dependencies or invent routes outside the contract. Return StageFiles with paths under admin/src/app/generated/ and .ts/.html/.scss/.css extensions.
+Use the supplied admin template and generatedApi contract exactly. You MUST emit
+admin/src/app/generated/routes.ts exporting generatedRoutes: Routes and every referenced
+component. Do not add dependencies or invent routes outside the contract. Return StageFiles with
+paths under admin/src/app/generated/ and .ts/.html/.scss/.css extensions.
 """,
-    "generate_pwa": f"""Generate Angular driver PWA domain screen/configuration. {PRODUCT_STACK}
-Use the supplied PWA template and generatedApi contract exactly. Respect offline safety: never cache credentials, personal API responses or payment commands. Return StageFiles with paths under pwa/src/app/generated/ and .ts/.html/.scss/.css extensions.
+    "generate_pwa": f"""Generate Angular end-user PWA domain screen/configuration. {PRODUCT_STACK}
+Use the supplied PWA template and generatedApi contract exactly. You MUST emit
+pwa/src/app/generated/routes.ts exporting generatedRoutes: Routes and every referenced
+component. Respect offline safety: never cache credentials, personal API responses or payment
+commands. Return StageFiles with paths under pwa/src/app/generated/ and .ts/.html/.scss/.css
+extensions.
 """,
-    "generate_tests_docs": f"""Generate tests and documentation using the provided documentationPolicy. {PRODUCT_STACK}
-Do not claim tests/builds passed. Document actual requirements, API, events, assumptions and limitations. Return StageFiles using only allowed docs/ and generated test paths.
+    "generate_tests_docs": f"""Generate tests and documentation using the provided
+documentationPolicy. {PRODUCT_STACK}
+Do not claim tests/builds passed. Document actual requirements, API, events, assumptions and
+limitations. Return StageFiles using only allowed docs/ and generated test paths.
 """,
     "repair": f"""Repair only the reported validation failures. {PRODUCT_STACK}
-Preserve the immutable SystemSpec, generatedApi contract, template dependencies and all existing tests. Do not disable checks, delete tests, weaken assertions, or rewrite unrelated files. Return only replacement StageFiles in allowed generated paths.
+Preserve the immutable SystemSpec, generatedApi contract, template dependencies and all existing
+tests. Do not disable checks, delete tests, weaken assertions, or rewrite unrelated files.
+Return only replacement StageFiles in allowed generated paths.
 """,
 }
 

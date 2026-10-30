@@ -31,6 +31,9 @@ def create_app(settings: Settings | None = None, runtime: Runtime | None = None)
             yield
         finally:
             close_database()
+            close_repository = getattr(runtime.repository, "close", None)
+            if close_repository is not None:
+                close_repository()
 
     errors = {code: {"model": ErrorDto} for code in (400, 404, 409, 413, 500, 502, 503)}
     app = FastAPI(

@@ -1,0 +1,19 @@
+include:
+  - compose.backend.yaml
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/hackathon-rwb-angular/Dockerfile
+    ports:
+      - "127.0.0.1:4200:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 6

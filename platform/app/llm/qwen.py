@@ -1,4 +1,5 @@
 """OpenAI-compatible HTTP transport for the configured Qwen provider."""
+
 from __future__ import annotations
 
 import json
@@ -25,10 +26,16 @@ def normalize_json_content(content: str) -> str:
         pass
     if "</think>" in text:
         prefix, _, suffix = text.partition("</think>")
-        if prefix.lstrip().startswith("<think>") or not prefix.lstrip().startswith(("{", "[", "```")):
+        if prefix.lstrip().startswith("<think>") or not prefix.lstrip().startswith(
+            ("{", "[", "```")
+        ):
             text = suffix.strip()
     lines = text.splitlines()
-    if len(lines) >= 3 and lines[0].strip().lower() in {"```", "```json"} and lines[-1].strip() == "```":
+    if (
+        len(lines) >= 3
+        and lines[0].strip().lower() in {"```", "```json"}
+        and lines[-1].strip() == "```"
+    ):
         text = "\n".join(lines[1:-1]).strip()
     return text
 
@@ -52,7 +59,9 @@ class QwenGenerationAdapter:
             or parsed.fragment
             or (parsed.scheme == "http" and parsed.hostname not in allowed_http_hosts)
         ):
-            raise AppError("invalid_qwen_url", "QWEN_BASE_URL должен быть безопасным HTTP(S) URL.", 503)
+            raise AppError(
+                "invalid_qwen_url", "QWEN_BASE_URL должен быть безопасным HTTP(S) URL.", 503
+            )
         if not settings.qwen_api_path.startswith("/") or ".." in settings.qwen_api_path:
             raise AppError("invalid_qwen_url", "Недопустимый QWEN_API_PATH.", 503)
         self.base_url = settings.qwen_base_url.rstrip("/")

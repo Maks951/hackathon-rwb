@@ -1,4 +1,5 @@
 """Strict, versioned domain contracts returned by the Qwen generation adapter."""
+
 from __future__ import annotations
 
 from typing import Literal
@@ -19,7 +20,18 @@ class ActorSpec(StrictModel):
 class FieldSpec(StrictModel):
     id: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_-]*$")
     name: str = Field(min_length=1, max_length=120)
-    type: Literal["string", "integer", "number", "boolean", "date", "datetime", "uuid", "enum", "json", "geojson"]
+    type: Literal[
+        "string",
+        "integer",
+        "number",
+        "boolean",
+        "date",
+        "datetime",
+        "uuid",
+        "enum",
+        "json",
+        "geojson",
+    ]
     nullable: bool = False
     required: bool = True
     enumValues: list[str] = Field(default_factory=list, max_length=100)

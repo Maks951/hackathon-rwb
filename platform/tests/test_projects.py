@@ -3,15 +3,34 @@ from uuid import uuid4
 
 import pytest
 from alembic.config import Config
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
+from starlette.exceptions import HTTPException
 
 from alembic import command
+from app.api.projects import router
 from app.db import get_session
 from app.models.project import Project
-from app.project_demo import app
+
+app = FastAPI()
+app.include_router(router)
+
+
+@app.exception_handler(RequestValidationError)
+def invalid_input(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=400, content={"code": "invalid_input", "message": "Invalid input"}
+    )
+
+
+@app.exception_handler(HTTPException)
+def http_error(request: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content=exc.detail)
 
 
 @pytest.fixture

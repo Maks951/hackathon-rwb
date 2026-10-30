@@ -34,8 +34,8 @@ P0: один worker. DB commit на создание проекта; RunReposito
 ## Работа сервиса
 
 HTTP возвращает созданный run без ожидания Qwen. Отдельный worker получает run
-из repository и сохраняет шаги. В текущей сборке реально подключены проекты;
-RunRepository и Qwen ещё отсутствуют, поэтому runs API возвращает 503.
+из repository и сохраняет шаги. Подключены projects, SQL RunRepository и Qwen factory. Qwen требует ENV;
+validator пока отсутствует. Успешная полная генерация не подтверждена.
 
 ## Авторизация
 

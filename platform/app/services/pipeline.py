@@ -211,7 +211,7 @@ class Pipeline:
                     "documentationPolicySha256": saved_policy.sha256,
                 },
             )
-            return StepResult(asdict(artifact), [artifact])
+            return StepResult(asdict(artifact), [*workspace.files, artifact])
 
         package_path = await self.steps.execute(
             run.id, "package", 1, {"workspaceId": workspace.id}, package_operation

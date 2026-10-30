@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from app.api.application import create_app
+from app.api.artifacts import router as artifacts_router
 from app.config import Settings
 from app.ports import Runtime
 from app.schemas.projects import ProjectCreate, ProjectList, ProjectRead
@@ -79,7 +80,7 @@ def typescript() -> str:
 
 def export(directory: Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
-    schema = create_app(Settings(_env_file=None), Runtime()).openapi()
+    schema = create_app(Settings(_env_file=None), Runtime(routers=(artifacts_router,))).openapi()
     (directory / "platform-openapi.json").write_text(
         json.dumps(schema, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

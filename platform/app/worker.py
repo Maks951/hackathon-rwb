@@ -98,9 +98,15 @@ async def async_main() -> None:
     task = asyncio.create_task(worker.serve())
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, task.cancel)
-    with suppress(asyncio.CancelledError):
-        await task
+        with suppress(NotImplementedError):  # Windows event loops lack signal handlers.
+            loop.add_signal_handler(sig, task.cancel)
+    try:
+        with suppress(asyncio.CancelledError):
+            await task
+    finally:
+        close = getattr(runtime.repository, "close", None)
+        if close is not None:
+            close()
 
 
 def main() -> None:

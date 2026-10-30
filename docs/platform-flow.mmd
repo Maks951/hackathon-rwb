@@ -1,0 +1,17 @@
+sequenceDiagram
+ participant U as UI
+ participant A as API
+ participant D as PostgreSQL
+ participant W as Worker
+ participant Q as Qwen
+ U->>A: Create project, start run
+ A->>D: Save snapshot and queued run
+ A-->>U: 202 and run ID
+ W->>D: Claim run and commit
+ W->>Q: Generate from requirements
+ Q-->>W: Structured response
+ Note over W: ValidationRunner required before packaging
+ W->>D: Save status and artifacts
+ U->>A: Poll run and events
+ A->>D: Read persisted state
+ A-->>U: Progress or error

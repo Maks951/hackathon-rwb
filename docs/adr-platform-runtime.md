@@ -8,7 +8,7 @@ Qwen, проверки и упаковка занимают больше вре�
 ## Статус
 
 ПРИНЯТО в командном плане `03_Yaroslav_Python_Pipeline.md` для P0.
-Python worker реализован; транзакционная очередь ждёт RunRepository Романа.
+Python worker и SQL RunRepository Романа объединены; PostgreSQL concurrency требует живого прогона.
 
 ## Альтернативы
 
