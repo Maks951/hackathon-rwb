@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/Generated.Api/Generated.Api.csproj" />
+  <Project Path="tests/Generated.Api.Tests/Generated.Api.Tests.csproj" />
+</Solution>
