@@ -137,3 +137,89 @@ def test_prompt_uses_json_and_stage_contract():
     assert "C# 14" in messages[0]["content"]
     assert "FastAPI" in messages[0]["content"]
     assert messages[1]["content"].startswith('{"stage":"generate_backend"')
+
+
+@pytest.mark.parametrize("host", ["host.docker.internal", "10.10.10.10", "qwen.example"])
+def test_non_loopback_http_requires_specific_docker_opt_in(host):
+    with pytest.raises(AppError):
+        QwenGenerationAdapter(settings(qwen_base_url=f"http://{host}:4000/v1"))
+
+
+def test_explicit_docker_host_http_is_accepted():
+    adapter = QwenGenerationAdapter(settings(
+        qwen_base_url="http://host.docker.internal:4000/v1",
+        qwen_allow_docker_host_http=True,
+    ))
+    assert adapter.base_url == "http://host.docker.internal:4000/v1"
+
+
+@pytest.mark.parametrize("host", ["10.10.10.10", "qwen.example", "host.docker.internal.example"])
+def test_docker_opt_in_does_not_allow_other_http_hosts(host):
+    with pytest.raises(AppError):
+        QwenGenerationAdapter(settings(
+            qwen_base_url=f"http://{host}:4000/v1",
+            qwen_allow_docker_host_http=True,
+        ))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wrapper", [
+    '{json}',
+    '<think>Reasoning about the schema.</think>\n{json}',
+    'Reasoning without an opening tag.\n</think>\n{json}',
+    '```json\n{json}\n```',
+    '```\n{json}\n```',
+    '<think>Reasoning.</think>\n```json\n{json}\n```',
+])
+async def test_provider_wrappers_are_removed_before_strict_validation(wrapper):
+    document = json.dumps({"schemaVersion": 1, "title": "Repair requests"})
+    async def handler(_request):
+        return httpx.Response(200, json={
+            "choices": [{"finish_reason": "stop", "message": {"content": wrapper.replace("{json}", document)}}]
+        })
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = QwenGenerationAdapter(settings(), client=client)
+        result = await adapter.generate(GenerationRequest("analyze", {"requirements": "Repair requests"}))
+    assert RequirementsSpec.model_validate_json(result.content).title == "Repair requests"
+
+
+def test_json_cleanup_preserves_tags_inside_generated_file_content():
+    from app.llm.qwen import normalize_json_content
+    text = json.dumps({"schemaVersion": 1, "title": "Keep </think> and ``` in a string"})
+    assert normalize_json_content(text) == text
+    assert normalize_json_content("```json\n" + text + "\n```") == text
+
+
+@pytest.mark.parametrize("content", [
+    '<think>Reasoning.</think>\n{"schemaVersion":1,"title":',
+    '<think>Reasoning.</think>\n{"schemaVersion":1,"title":"x","unexpected":true}',
+    '<think>Reasoning.</think>\n{"schemaVersion":1,"title":"x"} trailing prose',
+    '{"schemaVersion":1,"title":"x"} {"title":"y"}',
+    'Here is your answer: {"schemaVersion":1,"title":"x"}',
+])
+def test_cleanup_does_not_hide_malformed_json_or_schema_errors(content):
+    from app.llm.qwen import normalize_json_content
+    with pytest.raises(ValidationError):
+        RequirementsSpec.model_validate_json(normalize_json_content(content))
+
+
+@pytest.mark.parametrize("stage,schema", [("analyze", RequirementsSpec), ("design", SystemSpec)])
+def test_structured_stage_prompts_embed_the_actual_schema_and_enum_rules(stage, schema):
+    system = build_messages(GenerationRequest(stage, {}))[0]["content"]
+    marker = "Return an instance conforming to it, not the schema itself:\n"
+    assert json.loads(system.split(marker, 1)[1]) == schema.model_json_schema()
+    assert "enumValues must always be an array of strings, never null" in system
+    assert "use enumValues: [] or omit it" in system
+
+
+@pytest.mark.parametrize("field_type,enum_values", [
+    ("string", None), ("string", ""), ("string", {}),
+    ("enum", None), ("enum", []), ("enum", ["new", 1]),
+    ("string", ["unexpected"]),
+])
+def test_enum_contract_remains_strict(field_type, enum_values):
+    from app.llm.schemas import FieldSpec
+    with pytest.raises(ValidationError):
+        FieldSpec.model_validate({
+            "id": "status", "name": "Status", "type": field_type, "enumValues": enum_values,
+        })

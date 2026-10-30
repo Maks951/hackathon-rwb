@@ -4,9 +4,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.llm.schemas import RequirementsSpec, SystemSpec
 from app.ports import GenerationRequest
 
-PROMPT_VERSION = "rwb-qwen-v1"
+PROMPT_VERSION = "rwb-qwen-v2-schema"
 PRODUCT_STACK = (
     "Generated product stack is fixed: C# 14 / ASP.NET Core 10, Angular 20.1.6, "
     "PostgreSQL 17.9 with PostGIS where geospatial behavior is required. "
@@ -55,6 +56,23 @@ Preserve the immutable SystemSpec, generatedApi contract, template dependencies 
 
 def build_messages(request: GenerationRequest) -> list[dict[str, str]]:
     system = BASE_RULES + STAGE_INSTRUCTIONS[request.stage]
+    if request.stage in {"analyze", "design"}:
+        schema = RequirementsSpec if request.stage == "analyze" else SystemSpec
+        system += (
+            "\nFIELD RULES: enumValues must always be an array of strings, never null, "
+            "a string, or an object. For non-enum fields, use enumValues: [] or omit it. "
+            'For enum fields, provide a nonempty array, e.g. ["new","assigned","done"]. '
+            "nullable and required must be JSON booleans, not strings. "
+            "reference may be null; that does NOT make enumValues nullable.\n"
+            "Examples of valid fields:\n"
+            '{"id":"title","name":"Title","type":"string","nullable":false,'
+            '"required":true,"enumValues":[],"reference":null}\n'
+            '{"id":"status","name":"Status","type":"enum","nullable":false,'
+            '"required":true,"enumValues":["new","done"],"reference":null}\n'
+            "The following JSON Schema is authoritative for the output object. "
+            "Return an instance conforming to it, not the schema itself:\n"
+            + json.dumps(schema.model_json_schema(), ensure_ascii=False, separators=(",", ":"))
+        )
     user_payload: dict[str, Any] = {"stage": request.stage, "inputs": request.inputs}
     if request.json_errors:
         user_payload["format_errors"] = list(request.json_errors)

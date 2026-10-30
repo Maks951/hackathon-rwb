@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("QWEN_API_KEY", "RWB_QWEN_API_KEY"),
         repr=False,
     )
+    qwen_allow_docker_host_http: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("QWEN_ALLOW_DOCKER_HOST_HTTP", "RWB_QWEN_ALLOW_DOCKER_HOST_HTTP"),
+    )
     qwen_api_path: str = Field(
         default="/chat/completions",
         validation_alias=AliasChoices("QWEN_API_PATH", "RWB_QWEN_API_PATH"),

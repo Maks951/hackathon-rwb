@@ -15,6 +15,24 @@ from app.ports import GenerationRequest, GenerationResponse, GenerationStage
 from app.services.storage import StageFiles
 
 
+def normalize_json_content(content: str) -> str:
+    """Remove provider reasoning/fences; never repair or search inside invalid JSON."""
+    text = content.strip()
+    try:
+        json.loads(text)
+        return text  # Preserve literal </think> tags inside valid JSON strings/files.
+    except json.JSONDecodeError:
+        pass
+    if "</think>" in text:
+        prefix, _, suffix = text.partition("</think>")
+        if prefix.lstrip().startswith("<think>") or not prefix.lstrip().startswith(("{", "[", "```")):
+            text = suffix.strip()
+    lines = text.splitlines()
+    if len(lines) >= 3 and lines[0].strip().lower() in {"```", "```json"} and lines[-1].strip() == "```":
+        text = "\n".join(lines[1:-1]).strip()
+    return text
+
+
 class QwenGenerationAdapter:
     def __init__(self, settings: Settings, *, client: httpx.AsyncClient | None = None):
         if not settings.qwen_base_url or not settings.qwen_model or not settings.qwen_api_key:
@@ -24,12 +42,15 @@ class QwenGenerationAdapter:
                 503,
             )
         parsed = urlsplit(settings.qwen_base_url)
+        allowed_http_hosts = {"localhost", "127.0.0.1"}
+        if settings.qwen_allow_docker_host_http:
+            allowed_http_hosts.add("host.docker.internal")
         if (
             parsed.scheme not in {"https", "http"}
             or not parsed.netloc
             or parsed.query
             or parsed.fragment
-            or (parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1"})
+            or (parsed.scheme == "http" and parsed.hostname not in allowed_http_hosts)
         ):
             raise AppError("invalid_qwen_url", "QWEN_BASE_URL должен быть безопасным HTTP(S) URL.", 503)
         if not settings.qwen_api_path.startswith("/") or ".." in settings.qwen_api_path:
@@ -98,7 +119,7 @@ class QwenGenerationAdapter:
             else:
                 normalized_finish = str(finish_reason)
             return GenerationResponse(
-                content=content,
+                content=normalize_json_content(content),
                 model_id=str(body.get("model") or self.model),
                 prompt_version=PROMPT_VERSION,
                 finish_reason=normalized_finish,
