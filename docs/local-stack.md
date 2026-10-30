@@ -38,7 +38,7 @@ Nginx проксирует /api/ к api:8000, поэтому браузеру н
 Не применять `down -v` к данным команды.
 
 ```bash
-docker compose --env-file platform/.env run --rm api python scripts/qwen_smoke.py
+docker compose --env-file platform/.env run --rm api python -m scripts.qwen_smoke
 docker compose --env-file platform/.env --profile pipeline up --build -d
 docker compose --env-file platform/.env logs --tail=100 worker api
 docker compose --env-file platform/.env restart api worker database

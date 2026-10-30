@@ -23,7 +23,7 @@ Prompts требуют routes.ts для admin и PWA, версии Angular бе�
 ## Выполненные проверки
 
 - Python: 118 passed (28 dependency deprecation warnings).
-- Ruff check: all checks passed; format проверен.
+- Ruff check: all checks passed; 59 файлов соответствуют format.
 - UI: production build прошел; 4 test files, 12 tests passed.
 - Angular admin template: production build во временной копии с пустым тестовым
   generatedRoutes прошел. Это проверка host, не работа доменной генерации.
