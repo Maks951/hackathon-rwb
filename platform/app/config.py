@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("QWEN_API_PATH", "RWB_QWEN_API_PATH"),
     )
     qwen_allow_vm_http: bool = Field(default=False, validation_alias="QWEN_ALLOW_VM_HTTP")
+    qwen_enable_thinking: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("QWEN_ENABLE_THINKING", "RWB_QWEN_ENABLE_THINKING"),
+    )
     runner_url: str | None = None
     runner_token: SecretStr | None = Field(default=None, repr=False)
     runner_timeout_seconds: int = Field(default=600, ge=30, le=1800)

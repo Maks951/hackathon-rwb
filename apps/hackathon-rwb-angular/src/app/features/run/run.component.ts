@@ -59,7 +59,7 @@ import {
           @if (r.error) {
             <div class="alert alert-danger mt-3 mb-0">
               <div class="fw-semibold">Run failed</div>
-              <div>{{ r.error }}</div>
+              <div>{{ errorMessage(r.error) }}</div>
             </div>
           }
 
@@ -93,7 +93,7 @@ import {
                   <code>{{ s.key }}</code>
                   <span class="small text-muted">attempt {{ s.attempt }}</span>
                   @if (s.error) {
-                    <span class="small text-danger ms-auto text-truncate" style="max-width: 50%;">{{ s.error }}</span>
+                    <span class="small text-danger ms-auto" style="max-width: 50%;">{{ errorMessage(s.error) }}</span>
                   }
                 </li>
               }
@@ -231,6 +231,7 @@ import {
   `,
 })
 export class RunComponent implements OnInit, OnDestroy {
+  readonly errorMessage = apiErrorMessage;
   private destroyRef = inject(DestroyRef);
   private viewSub?: Subscription;
   private artifactSub = new Subscription();

@@ -188,6 +188,40 @@ def test_prompt_uses_json_and_stage_contract():
     assert messages[1]["content"].startswith('{"stage":"generate_backend"')
 
 
+@pytest.mark.parametrize(
+    "stage",
+    [
+        "generate_db",
+        "generate_backend",
+        "generate_web",
+        "generate_pwa",
+        "generate_tests_docs",
+        "repair",
+    ],
+)
+def test_file_generation_prompts_define_the_required_stage_files_contract(stage):
+    system = build_messages(GenerationRequest(stage, {}))[0]["content"]
+    marker = "Return an instance conforming to it, not the schema itself:\n"
+    assert json.loads(system.split(marker, 1)[1]) == StageFiles.model_json_schema()
+    assert '"notes": an array of strings' in system
+    assert "Do not put literal newlines inside JSON strings" in system
+
+
+def test_file_correction_keeps_schema_and_previous_output():
+    messages = build_messages(
+        GenerationRequest(
+            "generate_db",
+            {},
+            ("schemaVersion: missing", "notes: missing"),
+            '{"files":[{"path":"database/generated/schema.sql","content":"SELECT 1;"}]}',
+        )
+    )
+    assert '"StageFiles"' in messages[0]["content"]
+    payload = json.loads(messages[1]["content"])
+    assert payload["format_errors"] == ["schemaVersion: missing", "notes: missing"]
+    assert payload["previous_invalid_output"].startswith('{"files"')
+
+
 @pytest.mark.parametrize("host", ["host.docker.internal", "10.10.10.10", "qwen.example"])
 def test_non_loopback_http_requires_specific_docker_opt_in(host):
     with pytest.raises(AppError):

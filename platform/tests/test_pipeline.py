@@ -128,6 +128,8 @@ async def test_invalid_json_stops_after_one_correction(settings, runtime):
     await Worker(runtime, settings).run_once()
     run = await runtime.repository.get_run(queued.id)
     assert run.error.code == "invalid_model_output"
+    assert "json_invalid" in run.error.message
+    assert "bad json" not in run.error.message
     assert len(runtime.generation.requests) == 2
     assert len(runtime.repository.calls) == 2
 

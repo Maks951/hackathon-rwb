@@ -7,8 +7,9 @@ from typing import Any
 
 from app.llm.schemas import RequirementsSpec, SystemSpec
 from app.ports import GenerationRequest
+from app.services.storage import StageFiles
 
-PROMPT_VERSION = "rwb-qwen-v2-schema"
+PROMPT_VERSION = "rwb-qwen-v3-stage-files"
 PRODUCT_STACK = (
     "Generated product stack is fixed: C# 14 / ASP.NET Core 10, "
     "Angular (versions fixed by the supplied package-lock.json), "
@@ -94,6 +95,28 @@ def build_messages(request: GenerationRequest) -> list[dict[str, str]]:
             "The following JSON Schema is authoritative for the output object. "
             "Return an instance conforming to it, not the schema itself:\n"
             + json.dumps(schema.model_json_schema(), ensure_ascii=False, separators=(",", ":"))
+        )
+    else:
+        system += (
+            "\nStageFiles is a JSON object with exactly these required fields: "
+            '"schemaVersion": 1, "files": an array of objects with "path" and "content" '
+            'strings, and "notes": an array of strings (use [] when there are no notes). '
+            "Return at least one complete file. Do not return raw source code, SQL, "
+            "a filename-to-content mapping, or a schema. No additional properties. "
+            'File content is a JSON string: escape newlines as \\n, quotes as \\" '
+            "and backslashes as \\\\. Do not put literal newlines inside JSON strings.\n"
+            "Example of the envelope (use the current stage's ownedPaths and real content):\n"
+            + json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "files": [{"path": "database/generated/schema.sql", "content": "SELECT 1;\n"}],
+                    "notes": [],
+                },
+                separators=(",", ":"),
+            )
+            + "\nThe following JSON Schema is authoritative for the output object. "
+            "Return an instance conforming to it, not the schema itself:\n"
+            + json.dumps(StageFiles.model_json_schema(), ensure_ascii=False, separators=(",", ":"))
         )
     user_payload: dict[str, Any] = {"stage": request.stage, "inputs": request.inputs}
     if request.json_errors:

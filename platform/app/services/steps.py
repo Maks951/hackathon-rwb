@@ -142,16 +142,17 @@ class StepExecutor:
                     )
                     payload = output.model_dump(mode="json", by_alias=True)
                 except ValidationError as exc:
-                    if json_retries >= 1:
-                        raise AppError(
-                            "invalid_model_output", "Ответ модели не соответствует схеме."
-                        ) from None
-                    json_retries += 1
-                    # Only validation codes and field paths, never Pydantic input/context values.
+                    # Report schema locations/codes, never rejected input values or context.
                     errors = tuple(
                         f"{'.'.join(map(str, e['loc']))}: {e['type']}"
                         for e in exc.errors(include_input=False, include_context=False)[:20]
                     )
+                    if json_retries >= 1:
+                        raise AppError(
+                            "invalid_model_output",
+                            "Ответ модели не соответствует схеме: " + "; ".join(errors),
+                        ) from None
+                    json_retries += 1
                     request = GenerationRequest(stage, request.inputs, errors, response.content)
                     await self.repository.add_event(
                         run_id, "json_retry", "Исправление структуры JSON."

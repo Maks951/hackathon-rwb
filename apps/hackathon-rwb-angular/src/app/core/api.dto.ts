@@ -15,7 +15,7 @@ export interface RunDto {
   projectId: string;
   status: RunStatus;
   currentStep: string | null;
-  error: string | null;
+  error: ApiError | string | null;
   repositoryUrl: string | null;
   previewUrl: string | null;
   createdAt: string;
@@ -27,7 +27,7 @@ export interface StepDto {
   key: string;
   attempt: number;
   status: StepStatus;
-  error: string | null;
+  error: ApiError | string | null;
 }
 
 export interface RunDetailsDto extends RunDto {

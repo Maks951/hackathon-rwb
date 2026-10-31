@@ -10,5 +10,10 @@ export function apiErrorMessage(error: unknown): string {
     return `HTTP ${error.status}: request failed.`;
   }
   if (error instanceof Error && error.name === 'TimeoutError') return 'The API did not respond within 10 seconds. Retry the request.';
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    const code = 'code' in error && typeof error.code === 'string' ? error.code : null;
+    return code ? `${error.message} (${code})` : error.message;
+  }
   return 'Request failed. Please retry.';
 }

@@ -91,6 +91,7 @@ class QwenGenerationAdapter:
         self.api_key = settings.qwen_api_key.get_secret_value()
         self.timeout = settings.llm_timeout_seconds
         self.max_response_bytes = settings.max_response_bytes
+        self.enable_thinking = settings.qwen_enable_thinking
         self.client = client
 
     @staticmethod
@@ -105,8 +106,10 @@ class QwenGenerationAdapter:
         payload = {
             "model": self.model,
             "messages": build_messages(request),
-            "temperature": 0.1,
+            "temperature": 0.7,
+            "top_p": 0.8,
             "stream": False,
+            "chat_template_kwargs": {"enable_thinking": self.enable_thinking},
         }
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         url = self.base_url + self.api_path
@@ -131,17 +134,21 @@ class QwenGenerationAdapter:
             body = response.json()
             choice = body["choices"][0]
             message = choice["message"]
-            content = message["content"]
+            finish_reason = choice.get("finish_reason") or "unknown"
+            content = message.get("content")
+            # Some servers separate reasoning and leave final content empty when the
+            # token budget is exhausted. Preserve length so the worker diagnoses it.
+            if finish_reason == "length" and content is None:
+                content = ""
             if isinstance(content, list):
                 content = "".join(
                     part.get("text", "") for part in content if isinstance(part, dict)
                 )
-            if not isinstance(content, str) or not content.strip():
+            if not isinstance(content, str) or (not content.strip() and finish_reason != "length"):
                 raise ValueError("empty content")
             usage = body.get("usage") or {}
             input_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
             output_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
-            finish_reason = choice.get("finish_reason") or "unknown"
             if finish_reason == "length":
                 normalized_finish = "length"
             elif finish_reason in {"stop", "end_turn", "completed"}:
