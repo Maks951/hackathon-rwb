@@ -46,6 +46,10 @@ class Settings(BaseSettings):
         default="/chat/completions",
         validation_alias=AliasChoices("QWEN_API_PATH", "RWB_QWEN_API_PATH"),
     )
+    qwen_allow_vm_http: bool = Field(default=False, validation_alias="QWEN_ALLOW_VM_HTTP")
+    runner_url: str | None = None
+    runner_token: SecretStr | None = Field(default=None, repr=False)
+    runner_timeout_seconds: int = Field(default=600, ge=30, le=1800)
     heartbeat_seconds: float = Field(default=10, gt=0)
     stale_seconds: float = Field(default=60, gt=0)
     poll_seconds: float = Field(default=2, gt=0)

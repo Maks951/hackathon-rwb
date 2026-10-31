@@ -15,4 +15,8 @@ def test_compose_connects_migrations_health_and_separate_worker_without_docker_s
     assert services["worker"]["profiles"] == ["pipeline"]
     assert services["api"]["volumes"] == services["worker"]["volumes"]
     assert "ports" not in services["database"]
-    assert "docker.sock" not in (root / "compose.backend.yaml").read_text()
+    for name in ("api", "worker", "migrate"):
+        assert "docker.sock" not in str(services[name].get("volumes", []))
+    assert services["runner"]["profiles"] == ["pipeline"]
+    assert "env_file" not in services["runner"]
+    assert "ports" not in services["runner"]

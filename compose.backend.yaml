@@ -60,9 +60,36 @@ services:
     <<: *platform
     command: [python, -m, app.worker]
     profiles: [pipeline]
+    environment:
+      DATABASE_URL: postgresql+psycopg://platform:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in platform/.env}@database:5432/platform
+      RWB_RUNTIME_FACTORY: app.integrations.database_runtime:create_runtime
+      RWB_GENERATED_ROOT: /app/generated
+      RWB_TEMPLATES_ROOT: /app/templates
+      RWB_RUNNER_URL: http://runner:8090
+      RWB_RUNNER_TOKEN: ${RWB_RUNNER_TOKEN:-}
+      RWB_RUN_TIMEOUT_SECONDS: ${RWB_RUN_TIMEOUT_SECONDS:-2400}
     depends_on:
+      runner:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+  runner:
+    profiles: [pipeline]
+    build:
+      context: .
+      dockerfile: infra/runner/Dockerfile.broker
+    environment:
+      RWB_RUNNER_TOKEN: ${RWB_RUNNER_TOKEN:-}
+      RWB_RUNNER_TIMEOUT_SECONDS: ${RWB_RUNNER_TIMEOUT_SECONDS:-600}
+      RWB_SANDBOX_IMAGE: localhost/rwb-sandbox:dev
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
 volumes:
   platform-db:

@@ -1,0 +1,32 @@
+services:
+  database:
+    build: ./database
+    environment:
+      POSTGRES_DB: product
+      POSTGRES_USER: product
+      POSTGRES_PASSWORD: ${PRODUCT_DB_PASSWORD:?Set PRODUCT_DB_PASSWORD in .env}
+    volumes:
+      - product-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U product -d product"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  backend:
+    build: ./backend
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__ProductDatabase: Host=database;Database=product;Username=product;Password=${PRODUCT_DB_PASSWORD:?Set PRODUCT_DB_PASSWORD in .env}
+    depends_on:
+      database:
+        condition: service_healthy
+  admin:
+    build: ./admin
+    ports: ["127.0.0.1:4300:8080"]
+    depends_on: [backend]
+  pwa:
+    build: ./pwa
+    ports: ["127.0.0.1:4301:8080"]
+    depends_on: [backend]
+volumes:
+  product-data:

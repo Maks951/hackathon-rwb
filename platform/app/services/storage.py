@@ -169,8 +169,11 @@ class Storage:
             "angular-admin": "admin",
             "angular-pwa": "pwa",
             "postgres": "database",
+            "product": "",
         }.items():
             root = self.settings.templates_root.absolute() / template
+            if template == "product" and not root.is_dir():
+                continue  # Older test fixtures may omit deployment assets.
             if not root.is_dir():
                 raise AppError("template_missing", f"Не подключён шаблон: {template}.", 503)
             if any(p.is_symlink() for p in (root, *root.parents)):
@@ -185,7 +188,11 @@ class Storage:
                 ):
                     continue
                 if source.is_file():
-                    name = str(relative_path(f"{target}/{relative.as_posix()}"))
+                    name = str(
+                        relative_path(
+                            f"{target}/{relative.as_posix()}" if target else relative.as_posix()
+                        )
+                    )
                     if source.stat().st_size > self.settings.max_file_bytes:
                         raise AppError("output_too_large", "Превышен лимит файла шаблона.", 413)
                     result[name] = source.read_bytes()

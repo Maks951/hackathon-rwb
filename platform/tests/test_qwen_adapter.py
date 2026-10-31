@@ -309,3 +309,32 @@ def test_enum_contract_remains_strict(field_type, enum_values):
                 "enumValues": enum_values,
             }
         )
+
+
+def test_vm_http_exception_is_exact_and_opt_in(settings):
+    from pydantic import SecretStr
+
+    from app.errors import AppError
+    from app.llm.qwen import QwenGenerationAdapter
+
+    configured = settings.model_copy(
+        update={
+            "qwen_base_url": "http://10.10.10.10:4000/v1",
+            "qwen_model": "test",
+            "qwen_api_key": SecretStr("test-only"),
+            "qwen_allow_vm_http": False,
+        }
+    )
+    with pytest.raises(AppError):
+        QwenGenerationAdapter(configured)
+    configured.qwen_allow_vm_http = True
+    adapter = QwenGenerationAdapter(configured)
+    assert adapter.base_url + adapter.api_path == "http://10.10.10.10:4000/v1/chat/completions"
+    for url in [
+        "http://10.10.10.11:4000/v1",
+        "http://10.10.10.10:4001/v1",
+        "http://10.10.10.10:4000/other",
+        "http://user:pass@10.10.10.10:4000/v1",
+    ]:
+        with pytest.raises(AppError):
+            QwenGenerationAdapter(configured.model_copy(update={"qwen_base_url": url}))

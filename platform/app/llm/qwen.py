@@ -55,14 +55,35 @@ class QwenGenerationAdapter:
         if (
             parsed.scheme not in {"https", "http"}
             or not parsed.netloc
+            or parsed.username
+            or parsed.password
             or parsed.query
             or parsed.fragment
-            or (parsed.scheme == "http" and parsed.hostname not in allowed_http_hosts)
+            or (
+                parsed.scheme == "http"
+                and parsed.hostname not in allowed_http_hosts
+                and not (
+                    settings.qwen_allow_vm_http
+                    and parsed.hostname == "10.10.10.10"
+                    and parsed.port == 4000
+                    and parsed.path.rstrip("/") == "/v1"
+                )
+            )
         ):
             raise AppError(
                 "invalid_qwen_url", "QWEN_BASE_URL должен быть безопасным HTTP(S) URL.", 503
             )
-        if not settings.qwen_api_path.startswith("/") or ".." in settings.qwen_api_path:
+        if (
+            not settings.qwen_api_path.startswith("/")
+            or ".." in settings.qwen_api_path
+            or "?" in settings.qwen_api_path
+            or "#" in settings.qwen_api_path
+            or settings.qwen_api_path.startswith("//")
+            or (
+                parsed.path.rstrip("/").endswith("/v1")
+                and settings.qwen_api_path.startswith("/v1/")
+            )
+        ):
             raise AppError("invalid_qwen_url", "Недопустимый QWEN_API_PATH.", 503)
         self.base_url = settings.qwen_base_url.rstrip("/")
         self.api_path = settings.qwen_api_path

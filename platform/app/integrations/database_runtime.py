@@ -11,4 +11,14 @@ def create_runtime(settings):
         from app.llm.factory import create_qwen_adapter
 
         generation = create_qwen_adapter(settings)
-    return Runtime(repository=SqlRunRepository(settings), generation=generation, routers=(router,))
+    validator = None
+    if settings.runner_url:
+        from app.integrations.validation_runner import HttpValidationRunner
+
+        validator = HttpValidationRunner(settings)
+    return Runtime(
+        validator=validator,
+        repository=SqlRunRepository(settings),
+        generation=generation,
+        routers=(router,),
+    )

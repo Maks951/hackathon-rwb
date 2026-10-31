@@ -9,3 +9,5 @@ generated/
 bin/
 obj/
 TestResults/
+
+verification/

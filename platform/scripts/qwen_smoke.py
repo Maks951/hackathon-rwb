@@ -1,4 +1,5 @@
 """Make one real, minimal Qwen analyze call using the configured provider credentials."""
+
 import argparse
 import asyncio
 import getpass
@@ -42,16 +43,27 @@ async def main() -> None:
             },
         )
     )
+    if response.finish_reason != "stop":
+        print(
+            {
+                "ok": False,
+                "finishReason": response.finish_reason,
+                "error": "Provider did not finish the response normally",
+            }
+        )
+        raise SystemExit(1)
     try:
         parsed = adapter.output_schema("analyze").model_validate_json(response.content)
     except ValidationError as error:
-        print({
-            "ok": False,
-            "modelId": response.model_id,
-            "finishReason": response.finish_reason,
-            "containsThinkTag": "</think>" in response.content,
-            "validationErrors": error.errors(include_input=False, include_url=False),
-        })
+        print(
+            {
+                "ok": False,
+                "modelId": response.model_id,
+                "finishReason": response.finish_reason,
+                "containsThinkTag": "</think>" in response.content,
+                "validationErrors": error.errors(include_input=False, include_url=False),
+            }
+        )
         raise SystemExit(1) from None
     print(
         {

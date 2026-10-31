@@ -2,7 +2,8 @@
 
 Объединенная версия: [запуск и ограничения](docs/local-stack.md).
 Локальная интеграция frontend, SQL API/worker и Qwen adapter; полный сценарий
-генерации пока не подтвержден. ValidationRunner требует реализации/подключения.
+генерации пока не подтвержден. ValidationRunner реализован в ветке integration/qwen-runner; контейнерный прогон ещё не подтверждён.
+Текущая инструкция: [Qwen и runner](docs/qwen-runner.md).
 
 - `apps/hackathon-rwb-angular/`: интерфейс платформы.
 - `platform/`: API, очередь PostgreSQL, worker, Qwen и storage.
